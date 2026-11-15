@@ -56,9 +56,7 @@ impl Decoder for JpegDecoder {
         let exif = dec.exif().map(|e| strip_exif_header(e).to_vec());
         let frame = Frame::new(width, height, format, buf)
             .ok_or_else(|| DecodeError::format(NAME, "short pixel buffer"))?;
-        let mut img = DecodedImage::still(frame, NAME);
-        img.exif = exif;
-        Ok(img)
+        Ok(DecodedImage::still(frame, NAME).with_exif(exif))
     }
 }
 

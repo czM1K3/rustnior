@@ -8,8 +8,8 @@ use std::sync::Arc;
 use gtk::{glib, prelude::*};
 use rustnior_core::collection::absolute;
 use rustnior_core::{
-    Collection, DecodedImage, Decoders, LoadEvent, Loader, LoaderConfig, Result as DecodeResult,
-    ScanOptions,
+    Collection, DecodedImage, Decoders, LoadEvent, Loader, LoaderConfig, Orientation,
+    Result as DecodeResult, ScanOptions,
 };
 
 use crate::imageview::ImageView;
@@ -31,6 +31,9 @@ pub(crate) struct Inner {
     pub view: ImageView,
     pub message: gtk::Label,
     pub status: StatusBar,
+    pub header: gtk::HeaderBar,
+    pub overlay: gtk::Overlay,
+    pub fs: crate::fullscreen::FsUi,
     pub zoom_label: gtk::Label,
     pub loader: Loader,
     pub collection: RefCell<Collection>,
@@ -41,6 +44,11 @@ pub(crate) struct Inner {
     pub early_pending: RefCell<Option<PathBuf>>,
     /// Bumped per open request so a slow folder scan cannot clobber a newer one.
     pub scan_generation: Cell<u64>,
+    /// EXIF orientation of the shown image.
+    pub image_orientation: Cell<Orientation>,
+    /// Rotations/flips the user applied to the shown image (unsaved).
+    pub user_orientation: Cell<Orientation>,
+    pub show_statusbar: Cell<bool>,
 }
 
 pub(crate) struct StatusBar {
@@ -65,7 +73,7 @@ impl StatusBar {
         name.set_hexpand(true);
         let (dims, size, zoom, position) = (label(1.0), label(1.0), label(1.0), label(1.0));
         zoom.set_width_chars(6);
-        let root = gtk::Box::builder()
+        let row = gtk::Box::builder()
             .orientation(gtk::Orientation::Horizontal)
             .spacing(18)
             .margin_start(10)
@@ -74,8 +82,11 @@ impl StatusBar {
             .margin_bottom(3)
             .build();
         for w in [&name, &dims, &size, &zoom, &position] {
-            root.append(w);
+            row.append(w);
         }
+        let root = gtk::Box::new(gtk::Orientation::Vertical, 0);
+        root.append(&gtk::Separator::new(gtk::Orientation::Horizontal));
+        root.append(&row);
         Self {
             root,
             name,
@@ -113,7 +124,6 @@ impl Window {
         let status = StatusBar::new();
         let content = gtk::Box::new(gtk::Orientation::Vertical, 0);
         content.append(&overlay);
-        content.append(&gtk::Separator::new(gtk::Orientation::Horizontal));
         content.append(&status.root);
         window.set_child(Some(&content));
 
@@ -121,7 +131,10 @@ impl Window {
             .width_chars(6)
             .css_classes(["numeric"])
             .build();
-        window.set_titlebar(Some(&crate::actions::build_header(&zoom_label)));
+        let header = crate::actions::build_header(&zoom_label);
+        window.set_titlebar(Some(&header));
+        let fs = crate::fullscreen::FsUi::new();
+        overlay.add_overlay(&fs.revealer);
 
         // Loader events arrive on worker threads; forward them to the main loop.
         let (tx, rx) = async_channel::unbounded::<LoadEvent>();
@@ -135,6 +148,9 @@ impl Window {
                 view,
                 message,
                 status,
+                header,
+                overlay,
+                fs,
                 zoom_label,
                 loader,
                 collection: RefCell::new(Collection::default()),
@@ -142,6 +158,9 @@ impl Window {
                 shown: RefCell::new(None),
                 early_pending: RefCell::new(None),
                 scan_generation: Cell::new(0),
+                image_orientation: Cell::new(Orientation::IDENTITY),
+                user_orientation: Cell::new(Orientation::IDENTITY),
+                show_statusbar: Cell::new(true),
             }),
         };
 
@@ -163,6 +182,7 @@ impl Window {
 
         crate::actions::setup(&this, app);
         crate::input::setup(&this);
+        crate::fullscreen::setup(&this);
         this.inner.view.connect_view_changed(glib::clone!(
             #[weak(rename_to = inner)]
             this.inner,
@@ -320,6 +340,7 @@ impl Window {
         }
         let refs: Vec<&Path> = want.iter().map(PathBuf::as_path).collect();
         inner.loader.want(&refs);
+        self.restart_slideshow_timer();
     }
 
     fn on_load_event(&self, ev: LoadEvent) {
@@ -330,7 +351,9 @@ impl Window {
             LoadEvent::Loaded { path, image } => self.display(&path, &image),
             LoadEvent::Failed { path, error } => {
                 tracing::warn!(path = %path.display(), %error, "failed to load image");
-                self.inner.view.set_texture(None, true);
+                self.inner
+                    .view
+                    .set_texture(None, Orientation::IDENTITY, true);
                 self.inner.shown.replace(Some(path.clone()));
                 self.show_message(Some(&format!(
                     "Could not open {}\n{error}",
@@ -347,14 +370,40 @@ impl Window {
             return;
         }
         let texture = img.first_frame().map(frame_to_texture);
-        self.inner.view.set_texture(texture, true);
+        self.inner.image_orientation.set(img.orientation);
+        self.inner.user_orientation.set(Orientation::IDENTITY);
+        self.inner.view.set_texture(texture, img.orientation, true);
         self.inner.shown.replace(Some(path.to_owned()));
         self.show_message(None);
         self.update_status();
     }
 
+    /// Applies a rotate/flip to the shown image (display only until saved).
+    pub fn transform(&self, f: impl FnOnce(Orientation) -> Orientation) {
+        let inner = &self.inner;
+        if inner.view.texture().is_none() {
+            return;
+        }
+        let user = f(inner.user_orientation.get());
+        inner.user_orientation.set(user);
+        inner
+            .view
+            .set_orientation(inner.image_orientation.get().then(user));
+    }
+
+    /// Shows or hides the status bar (always hidden in fullscreen).
+    pub fn set_statusbar_visible(&self, on: bool) {
+        self.inner.show_statusbar.set(on);
+        self.inner
+            .status
+            .root
+            .set_visible(on && !self.inner.window.is_fullscreen());
+    }
+
     fn clear(&self) {
-        self.inner.view.set_texture(None, true);
+        self.inner
+            .view
+            .set_texture(None, Orientation::IDENTITY, true);
         self.inner.shown.replace(None);
         self.inner.window.set_title(Some("rustnior"));
         self.show_message(Some("No images to show"));

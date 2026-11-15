@@ -1,6 +1,8 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use crate::transform::Orientation;
+
 /// In-memory pixel layouts produced by decoders. All are 8 bits per channel.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum PixelFormat {
@@ -77,6 +79,8 @@ pub struct DecodedImage {
     pub is_preview: bool,
     /// Raw EXIF block (TIFF structure) if the container had one.
     pub exif: Option<Vec<u8>>,
+    /// How the frames must be transformed for display (from EXIF).
+    pub orientation: Orientation,
 }
 
 impl DecodedImage {
@@ -89,6 +93,7 @@ impl DecodedImage {
             format_name,
             is_preview: false,
             exif: None,
+            orientation: Orientation::IDENTITY,
         }
     }
 
@@ -98,6 +103,21 @@ impl DecodedImage {
 
     pub fn is_animated(&self) -> bool {
         self.frames.len() > 1
+    }
+
+    /// Attaches an EXIF block and derives the orientation from it.
+    pub fn with_exif(mut self, exif: Option<Vec<u8>>) -> Self {
+        self.orientation = exif
+            .as_deref()
+            .map_or(Orientation::IDENTITY, crate::exif::orientation);
+        self.exif = exif;
+        self
+    }
+
+    /// Display size after applying the EXIF orientation.
+    pub fn oriented_size(&self) -> (u32, u32) {
+        self.orientation
+            .apply_size(self.source_width, self.source_height)
     }
 
     /// Bytes of pixel memory held by this image.

@@ -32,14 +32,19 @@ fn decodes_still_formats() {
         assert_eq!(f.format, format, "{name} format");
         assert_eq!(img.format_name, format_name, "{name} format name");
         assert_eq!(f.data.len(), f.stride * h as usize, "{name} buffer");
+        assert!(img.orientation.is_identity(), "{name} orientation");
     }
 }
 
 #[test]
 fn jpeg_exposes_exif() {
     let img = decode("orient6.jpg").expect("decode");
+    assert_eq!(img.orientation, rustnior_core::Orientation::from_exif(6));
+    assert_eq!(img.oriented_size(), (48, 64));
     let exif = img.exif.expect("exif block");
     assert!(exif.starts_with(b"II") || exif.starts_with(b"MM"));
+    let fields = rustnior_core::exif::fields(&exif);
+    assert!(fields.iter().any(|(k, _)| k == "Orientation"), "{fields:?}");
 }
 
 #[test]

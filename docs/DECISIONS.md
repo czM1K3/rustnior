@@ -26,3 +26,9 @@ Defaults chosen without asking, per the working process in CLAUDE.md.
 - **Folder scanning** runs on a worker thread; a single opened file is shown before
   its folder has been listed.
 - **No folder recursion**, matching Viewnior.
+- **Extra keys**: `R` rotates clockwise and `L` anticlockwise in addition to Viewnior's
+  `Ctrl+R` / `Ctrl+Shift+R`.
+- **Fullscreen** hides the header and status bar and shows a floating OSD toolbar
+  (prev/next, slideshow toggle + interval, fit, rotate, leave) that hides with the
+  cursor after 2 s without pointer movement. Leaving fullscreen stops the slideshow.
+- **Slideshow** wraps around at the end; manual navigation restarts the countdown.

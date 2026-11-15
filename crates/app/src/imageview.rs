@@ -6,8 +6,8 @@
 use std::cell::{Cell, RefCell};
 
 use gtk::{gdk, glib, graphene, gsk, prelude::*, subclass::prelude::*};
-use rustnior_core::Viewport;
 use rustnior_core::viewport::ZoomMode;
+use rustnior_core::{Orientation, Viewport};
 
 /// Duration of smooth zoom animations, in microseconds.
 const ZOOM_ANIM_US: f64 = 160_000.0;
@@ -32,6 +32,7 @@ mod imp {
     pub struct ImageView {
         pub texture: RefCell<Option<gdk::Texture>>,
         pub has_alpha: Cell<bool>,
+        pub orientation: Cell<Orientation>,
         pub viewport: RefCell<Viewport>,
         pub anim: RefCell<Option<ZoomAnim>>,
         pub tick: RefCell<Option<gtk::TickCallbackId>>,
@@ -126,22 +127,52 @@ impl ImageView {
         })
     }
 
-    /// Shows a new texture. `reset_zoom` re-applies fit mode; otherwise the
-    /// current zoom mode is kept (useful when refining a preview).
-    pub fn set_texture(&self, texture: Option<gdk::Texture>, reset_zoom: bool) {
+    /// Shows a new texture with the given display orientation. `reset_zoom`
+    /// re-applies fit mode; otherwise the current zoom mode is kept (useful
+    /// when refining a preview or swapping animation frames).
+    pub fn set_texture(
+        &self,
+        texture: Option<gdk::Texture>,
+        orientation: Orientation,
+        reset_zoom: bool,
+    ) {
         let imp = self.imp();
         self.stop_animation();
+        imp.orientation.set(orientation);
         if let Some(t) = &texture {
             imp.has_alpha.set(texture_has_alpha(t));
             let mut vp = imp.viewport.borrow_mut();
             if reset_zoom {
                 vp.fit();
             }
-            vp.set_image_size(t.width() as u32, t.height() as u32);
+            let (w, h) = orientation.apply_size(t.width() as u32, t.height() as u32);
+            if reset_zoom || vp.image_size() != (f64::from(w), f64::from(h)) {
+                vp.set_image_size(w, h);
+            }
         }
         imp.texture.replace(texture);
-        self.emit_view_changed();
+        self.changed();
+    }
+
+    /// Replaces the pixels without touching zoom or pan (animation frames).
+    pub fn replace_texture(&self, texture: gdk::Texture) {
+        self.imp().texture.replace(Some(texture));
         self.queue_draw();
+    }
+
+    pub fn orientation(&self) -> Orientation {
+        self.imp().orientation.get()
+    }
+
+    /// Changes the display orientation (rotate/flip), re-fitting in fit mode.
+    pub fn set_orientation(&self, orientation: Orientation) {
+        let imp = self.imp();
+        imp.orientation.set(orientation);
+        if let Some(t) = imp.texture.borrow().as_ref() {
+            let (w, h) = orientation.apply_size(t.width() as u32, t.height() as u32);
+            imp.viewport.borrow_mut().set_image_size(w, h);
+        }
+        self.changed();
     }
 
     pub fn texture(&self) -> Option<gdk::Texture> {
@@ -392,7 +423,33 @@ impl ImageView {
         } else {
             gsk::ScalingFilter::Linear
         };
-        snapshot.append_scaled_texture(&texture, filter, &rect);
+        let o = imp.orientation.get();
+        if o.is_identity() {
+            snapshot.append_scaled_texture(&texture, filter, &rect);
+            return;
+        }
+        // Draw the unrotated texture centred on the origin, mirrored and
+        // rotated by GSK, then moved into place.
+        let (tw, th) = if o.swaps_dimensions() {
+            (rect.height(), rect.width())
+        } else {
+            (rect.width(), rect.height())
+        };
+        snapshot.save();
+        snapshot.translate(&graphene::Point::new(
+            rect.x() + rect.width() / 2.0,
+            rect.y() + rect.height() / 2.0,
+        ));
+        snapshot.rotate(o.rotation_degrees() as f32);
+        if o.is_flipped() {
+            snapshot.scale(-1.0, 1.0);
+        }
+        snapshot.append_scaled_texture(
+            &texture,
+            filter,
+            &graphene::Rect::new(-tw / 2.0, -th / 2.0, tw, th),
+        );
+        snapshot.restore();
     }
 }
 

@@ -2,6 +2,7 @@
 
 mod actions;
 mod dialogs;
+mod fullscreen;
 mod imageview;
 mod input;
 mod texture;
@@ -66,6 +67,11 @@ fn main() -> ExitCode {
         let win = Window::new(app, Arc::clone(&decoders));
         win.present();
         win.open_paths(cli.paths.clone(), early.borrow_mut().take());
+        if cli.slideshow {
+            win.set_slideshow(true);
+        } else if cli.fullscreen {
+            win.window().fullscreen();
+        }
         #[cfg(debug_assertions)]
         smoke::run_script(&win);
     });

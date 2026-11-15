@@ -1,7 +1,7 @@
 //! Window actions, their keyboard accelerators and the header bar.
 
 use gtk::{gio, glib, prelude::*};
-use rustnior_core::{SortKey, SortOrder};
+use rustnior_core::{Orientation, SortKey, SortOrder};
 
 use crate::window::Window;
 
@@ -9,7 +9,14 @@ use crate::window::Window;
 const ACCELS: &[(&str, &[&str])] = &[
     ("win.open", &["<Control>o"]),
     ("win.open-folder", &["<Control>f"]),
-    ("win.close", &["<Control>w", "Escape", "q"]),
+    ("win.close", &["<Control>w"]),
+    ("win.escape", &["Escape", "q"]),
+    ("win.fullscreen", &["F11"]),
+    ("win.slideshow", &["F5"]),
+    ("win.rotate-cw", &["<Control>r", "r"]),
+    ("win.rotate-ccw", &["<Control><Shift>r", "l"]),
+    ("win.flip-horizontal", &["h"]),
+    ("win.flip-vertical", &["v"]),
     (
         "win.next",
         &["space", "Page_Down", "<Alt>Right", "KP_Page_Down"],
@@ -62,6 +69,23 @@ pub fn setup(win: &Window, app: &gtk::Application) {
     add("open", Box::new(crate::dialogs::open_files));
     add("open-folder", Box::new(crate::dialogs::open_folder));
     add("close", Box::new(|w| w.window().close()));
+    add("escape", Box::new(Window::escape));
+    add(
+        "rotate-cw",
+        Box::new(|w| w.transform(Orientation::rotate_cw)),
+    );
+    add(
+        "rotate-ccw",
+        Box::new(|w| w.transform(Orientation::rotate_ccw)),
+    );
+    add(
+        "flip-horizontal",
+        Box::new(|w| w.transform(Orientation::flip_horizontal)),
+    );
+    add(
+        "flip-vertical",
+        Box::new(|w| w.transform(Orientation::flip_vertical)),
+    );
     add("next", Box::new(|w| w.navigate(1)));
     add("prev", Box::new(|w| w.navigate(-1)));
     add("first", Box::new(Window::first));
@@ -104,12 +128,27 @@ pub fn setup(win: &Window, app: &gtk::Application) {
     });
     w.add_action(&desc);
 
-    let status = gio::PropertyAction::new("show-statusbar", &win.inner.status.root, "visible");
-    w.add_action(&status);
+    add_toggle(win, "fullscreen", false, |w, _| w.toggle_fullscreen());
+    add_toggle(win, "slideshow", false, Window::set_slideshow);
+    add_toggle(win, "show-statusbar", true, Window::set_statusbar_visible);
 
     for (action, accels) in ACCELS {
         app.set_accels_for_action(action, accels);
     }
+}
+
+/// A boolean stateful action. `f` receives the requested new state; it is
+/// responsible for the state change where that is asynchronous (fullscreen).
+fn add_toggle(win: &Window, name: &str, initial: bool, f: fn(&Window, bool)) {
+    let action = gio::SimpleAction::new_stateful(name, None, &initial.to_variant());
+    let weak = std::rc::Rc::downgrade(&win.inner);
+    action.connect_activate(move |a, _| {
+        let Some(inner) = weak.upgrade() else { return };
+        let on = !a.state().and_then(|s| s.get::<bool>()).unwrap_or(false);
+        a.set_state(&on.to_variant());
+        f(&Window { inner }, on);
+    });
+    win.inner.window.add_action(&action);
 }
 
 impl Window {
@@ -146,6 +185,19 @@ pub fn build_header(zoom_label: &gtk::Label) -> gtk::HeaderBar {
     ));
     nav.append(&button("go-next-symbolic", "win.next", "Next (Space)"));
     header.pack_start(&nav);
+    let rotate = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+    rotate.add_css_class("linked");
+    rotate.append(&button(
+        "object-rotate-left-symbolic",
+        "win.rotate-ccw",
+        "Rotate Anticlockwise (Ctrl+Shift+R)",
+    ));
+    rotate.append(&button(
+        "object-rotate-right-symbolic",
+        "win.rotate-cw",
+        "Rotate Clockwise (Ctrl+R)",
+    ));
+    header.pack_start(&rotate);
 
     let menu = gio::Menu::new();
     let files = gio::Menu::new();
@@ -158,7 +210,15 @@ pub fn build_header(zoom_label: &gtk::Label) -> gtk::HeaderBar {
     sort.append(Some("By Size"), Some("win.sort-by::size"));
     sort.append(Some("Descending"), Some("win.sort-descending"));
     menu.append_submenu(Some("Sort Images"), &sort);
+    let image = gio::Menu::new();
+    image.append(Some("Rotate Clockwise"), Some("win.rotate-cw"));
+    image.append(Some("Rotate Anticlockwise"), Some("win.rotate-ccw"));
+    image.append(Some("Flip Horizontally"), Some("win.flip-horizontal"));
+    image.append(Some("Flip Vertically"), Some("win.flip-vertical"));
+    menu.append_section(None, &image);
     let view = gio::Menu::new();
+    view.append(Some("Fullscreen"), Some("win.fullscreen"));
+    view.append(Some("Slideshow"), Some("win.slideshow"));
     view.append(Some("Status Bar"), Some("win.show-statusbar"));
     menu.append_section(None, &view);
     let close = gio::Menu::new();
@@ -171,6 +231,11 @@ pub fn build_header(zoom_label: &gtk::Label) -> gtk::HeaderBar {
         .focusable(false)
         .build();
     header.pack_end(&menu_button);
+    header.pack_end(&button(
+        "view-fullscreen-symbolic",
+        "win.fullscreen",
+        "Fullscreen (F11)",
+    ));
 
     let zoom = gtk::Box::new(gtk::Orientation::Horizontal, 0);
     zoom.add_css_class("linked");

@@ -1,6 +1,6 @@
 use std::io::Cursor;
 
-use image::{DynamicImage, ImageFormat, ImageReader};
+use image::{DynamicImage, ImageDecoder, ImageFormat, ImageReader};
 
 use super::{DecodeRequest, Decoder};
 use crate::error::{DecodeError, Result};
@@ -33,10 +33,14 @@ impl Decoder for GenericDecoder {
 
         let mut reader = ImageReader::with_format(Cursor::new(data), format);
         reader.no_limits();
-        let img = reader.decode().map_err(|e| DecodeError::format(name, e))?;
+        let mut decoder = reader
+            .into_decoder()
+            .map_err(|e| DecodeError::format(name, e))?;
+        let exif = decoder.exif_metadata().ok().flatten();
+        let img = DynamicImage::from_decoder(decoder).map_err(|e| DecodeError::format(name, e))?;
         req.cancel.check()?;
         let frame = dynamic_to_frame(img).ok_or_else(|| DecodeError::format(name, "bad buffer"))?;
-        Ok(DecodedImage::still(frame, name))
+        Ok(DecodedImage::still(frame, name).with_exif(exif))
     }
 }
 

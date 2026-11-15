@@ -7,7 +7,7 @@ Legend: `[ ]` todo · `[x]` done · `(M#)` target milestone · `+` = beyond View
 
 ## Opening
 - [x] Open file(s) / folder(s) from the CLI (`rustnior [FILES|FOLDERS]...`) (M1/M2)
-- [ ] `--fullscreen`, `--slideshow` CLI flags (M3)
+- [x] `--fullscreen`, `--slideshow` CLI flags (M3)
 - [x] Open Image… (`Ctrl+O`) and Open Folder… (`Ctrl+F`) file choosers (M2)
 - [x] Drag-and-drop files/folders/URIs onto the window (M2)
 - [x] "Browse only selected images": opening several files limits the collection to them (M2)
@@ -33,15 +33,15 @@ Legend: `[ ]` todo · `[x]` done · `(M#)` target milestone · `+` = beyond View
 - [ ] Adjust window size to the image (M6)
 
 ## Transform
-- [ ] Rotate clockwise `Ctrl+R` (+ `R`), anticlockwise `Ctrl+Shift+R` (+ `L`) (M3)
-- [ ] Flip horizontal `H`, flip vertical `V` (M3)
-- [ ] Respect EXIF orientation automatically (M3)
+- [x] Rotate clockwise `Ctrl+R` (+ `R`), anticlockwise `Ctrl+Shift+R` (+ `L`) (M3)
+- [x] Flip horizontal `H`, flip vertical `V` (M3)
+- [x] Respect EXIF orientation automatically (M3)
 - [ ] On navigating away from a modified image: ask / auto-save / ignore (pref) (M5)
 
 ## Modes
-- [ ] Fullscreen `F11` (toggle), `Esc` leaves; auto-hiding toolbar/cursor (M3)
-- [ ] Fit image when entering fullscreen (pref) (M3)
-- [ ] Slideshow `F5`, configurable interval (default 5 s); `Esc` stops (M3)
+- [x] Fullscreen `F11` (toggle), `Esc` leaves; auto-hiding toolbar/cursor (M3)
+- [x] Fit image when entering fullscreen (pref) (M3)
+- [x] Slideshow `F5`, configurable interval (default 5 s); `Esc` stops (M3)
 - [ ] Double-click behaviour (pref): zoom (default, toggles fit↔100%) / fullscreen / next (M3/M6)
 - [x] `Esc`/`Q` quits in normal mode, `Ctrl+W` closes window (M1)
 
