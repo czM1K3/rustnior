@@ -12,8 +12,10 @@ use rustnior_core::{
     Result as DecodeResult, ScanOptions,
 };
 
+use crate::animation::Animator;
 use crate::imageview::ImageView;
 use crate::texture::frame_to_texture;
+use crate::thumbstrip::ThumbStrip;
 
 /// An image decoded before the window existed (see `main`).
 pub type EarlyLoad = (PathBuf, DecodeResult<DecodedImage>);
@@ -34,6 +36,7 @@ pub(crate) struct Inner {
     pub header: gtk::HeaderBar,
     pub overlay: gtk::Overlay,
     pub fs: crate::fullscreen::FsUi,
+    pub strip: ThumbStrip,
     pub zoom_label: gtk::Label,
     pub loader: Loader,
     pub collection: RefCell<Collection>,
@@ -49,6 +52,8 @@ pub(crate) struct Inner {
     /// Rotations/flips the user applied to the shown image (unsaved).
     pub user_orientation: Cell<Orientation>,
     pub show_statusbar: Cell<bool>,
+    pub show_thumbnails: Cell<bool>,
+    pub animator: RefCell<Option<Rc<Animator>>>,
 }
 
 pub(crate) struct StatusBar {
@@ -122,8 +127,10 @@ impl Window {
         overlay.add_overlay(&message);
 
         let status = StatusBar::new();
+        let strip = ThumbStrip::new(Arc::clone(&decoders), window.scale_factor());
         let content = gtk::Box::new(gtk::Orientation::Vertical, 0);
         content.append(&overlay);
+        content.append(&strip.root);
         content.append(&status.root);
         window.set_child(Some(&content));
 
@@ -151,6 +158,7 @@ impl Window {
                 header,
                 overlay,
                 fs,
+                strip,
                 zoom_label,
                 loader,
                 collection: RefCell::new(Collection::default()),
@@ -161,6 +169,8 @@ impl Window {
                 image_orientation: Cell::new(Orientation::IDENTITY),
                 user_orientation: Cell::new(Orientation::IDENTITY),
                 show_statusbar: Cell::new(true),
+                show_thumbnails: Cell::new(false),
+                animator: RefCell::new(None),
             }),
         };
 
@@ -183,6 +193,14 @@ impl Window {
         crate::actions::setup(&this, app);
         crate::input::setup(&this);
         crate::fullscreen::setup(&this);
+        let weak = Rc::downgrade(&this.inner);
+        this.inner.strip.connect_activate(move |i| {
+            let Some(inner) = weak.upgrade() else { return };
+            let w = Window { inner };
+            if w.inner.collection.borrow_mut().select(i).is_some() {
+                w.show_current();
+            }
+        });
         this.inner.view.connect_view_changed(glib::clone!(
             #[weak(rename_to = inner)]
             this.inner,
@@ -239,6 +257,7 @@ impl Window {
             self.inner
                 .collection
                 .replace(Collection::single(single.clone()));
+            self.collection_changed();
             self.show_current();
         } else {
             self.show_message(Some("Loading…"));
@@ -262,6 +281,7 @@ impl Window {
                 scanned.select_path(&cur);
             }
             this.inner.collection.replace(scanned);
+            this.collection_changed();
             this.show_current();
         });
     }
@@ -333,6 +353,9 @@ impl Window {
             (entry.path.clone(), want)
         };
         self.update_status();
+        self.inner
+            .strip
+            .select(inner.collection.borrow().current_index());
         tracing::debug!(path = %path.display(), want = want.len(), "show current");
 
         if let Some(img) = inner.loader.cached(&path) {
@@ -351,6 +374,9 @@ impl Window {
             LoadEvent::Loaded { path, image } => self.display(&path, &image),
             LoadEvent::Failed { path, error } => {
                 tracing::warn!(path = %path.display(), %error, "failed to load image");
+                if let Some(old) = self.inner.animator.take() {
+                    old.stop();
+                }
                 self.inner
                     .view
                     .set_texture(None, Orientation::IDENTITY, true);
@@ -364,12 +390,18 @@ impl Window {
         }
     }
 
-    fn display(&self, path: &Path, img: &DecodedImage) {
+    fn display(&self, path: &Path, img: &Arc<DecodedImage>) {
         if self.inner.shown.borrow().as_deref() == Some(path) && self.inner.view.texture().is_some()
         {
             return;
         }
         let texture = img.first_frame().map(frame_to_texture);
+        let animator = img
+            .is_animated()
+            .then(|| Animator::start(Arc::clone(img), self.inner.view.clone(), texture.clone()));
+        if let Some(old) = self.inner.animator.replace(animator) {
+            old.stop();
+        }
         self.inner.image_orientation.set(img.orientation);
         self.inner.user_orientation.set(Orientation::IDENTITY);
         self.inner.view.set_texture(texture, img.orientation, true);
@@ -391,6 +423,25 @@ impl Window {
             .set_orientation(inner.image_orientation.get().then(user));
     }
 
+    /// Rebuilds views of the whole collection (thumbnail strip).
+    pub fn collection_changed(&self) {
+        self.inner
+            .strip
+            .set_collection(&self.inner.collection.borrow());
+    }
+
+    /// Shows or hides the thumbnail strip (hidden in fullscreen).
+    pub fn set_thumbnails_visible(&self, on: bool) {
+        self.inner.show_thumbnails.set(on);
+        self.inner
+            .strip
+            .root
+            .set_visible(on && !self.inner.window.is_fullscreen());
+        self.inner
+            .strip
+            .select(self.inner.collection.borrow().current_index());
+    }
+
     /// Shows or hides the status bar (always hidden in fullscreen).
     pub fn set_statusbar_visible(&self, on: bool) {
         self.inner.show_statusbar.set(on);
@@ -401,6 +452,9 @@ impl Window {
     }
 
     fn clear(&self) {
+        if let Some(old) = self.inner.animator.take() {
+            old.stop();
+        }
         self.inner
             .view
             .set_texture(None, Orientation::IDENTITY, true);
@@ -436,10 +490,8 @@ impl Window {
                 .loader
                 .cached(&entry.path)
                 .map(|img| {
-                    format!(
-                        "{} × {} {}",
-                        img.source_width, img.source_height, img.format_name
-                    )
+                    let (w, h) = img.oriented_size();
+                    format!("{w} × {h} {}", img.format_name)
                 })
                 .unwrap_or_default()
         } else {

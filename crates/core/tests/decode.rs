@@ -59,3 +59,29 @@ fn broken_file_is_an_error_not_a_panic() {
 fn missing_file_is_io_error() {
     assert!(matches!(decode("nope.png"), Err(DecodeError::Io { .. })));
 }
+
+#[test]
+fn decodes_animations() {
+    for name in ["anim.gif", "anim.apng", "anim.webp"] {
+        let img = decode(name).unwrap_or_else(|e| panic!("{name}: {e}"));
+        assert_eq!(img.frames.len(), 3, "{name} frames");
+        assert!(img.is_animated());
+        for f in &img.frames {
+            assert_eq!((f.width, f.height), (16, 16), "{name}");
+            assert_eq!(
+                f.delay,
+                std::time::Duration::from_millis(100),
+                "{name} delay"
+            );
+        }
+        // Frames are red, lime, blue (ImageMagick's APNG is off by one or two).
+        let expected = [[255u8, 0, 0], [0, 255, 0], [0, 0, 255]];
+        for (f, want) in img.frames.iter().zip(expected) {
+            let close = f.data[..3]
+                .iter()
+                .zip(want)
+                .all(|(a, b)| a.abs_diff(b) <= 2);
+            assert!(close, "{name}: {:?} vs {want:?}", &f.data[..3]);
+        }
+    }
+}

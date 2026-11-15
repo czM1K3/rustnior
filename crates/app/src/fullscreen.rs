@@ -169,6 +169,10 @@ impl Window {
             .status
             .root
             .set_visible(!fullscreen && inner.show_statusbar.get());
+        inner
+            .strip
+            .root
+            .set_visible(!fullscreen && inner.show_thumbnails.get());
         inner.fs.revealer.set_visible(fullscreen);
         set_action_state(&inner.window, "fullscreen", fullscreen);
         if fullscreen {

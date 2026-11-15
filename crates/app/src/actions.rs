@@ -17,6 +17,10 @@ const ACCELS: &[(&str, &[&str])] = &[
     ("win.rotate-ccw", &["<Control><Shift>r", "l"]),
     ("win.flip-horizontal", &["h"]),
     ("win.flip-vertical", &["v"]),
+    ("win.show-thumbnails", &["t"]),
+    ("win.animation-toggle", &["p"]),
+    ("win.animation-step", &["j"]),
+    ("win.properties", &["<Alt>Return", "<Alt>KP_Enter"]),
     (
         "win.next",
         &["space", "Page_Down", "<Alt>Right", "KP_Page_Down"],
@@ -70,6 +74,23 @@ pub fn setup(win: &Window, app: &gtk::Application) {
     add("open-folder", Box::new(crate::dialogs::open_folder));
     add("close", Box::new(|w| w.window().close()));
     add("escape", Box::new(Window::escape));
+    add(
+        "animation-toggle",
+        Box::new(|w| {
+            if let Some(a) = w.inner.animator.borrow().as_ref() {
+                a.toggle();
+            }
+        }),
+    );
+    add(
+        "animation-step",
+        Box::new(|w| {
+            if let Some(a) = w.inner.animator.borrow().as_ref() {
+                a.step();
+            }
+        }),
+    );
+    add("properties", Box::new(crate::properties::show));
     add(
         "rotate-cw",
         Box::new(|w| w.transform(Orientation::rotate_cw)),
@@ -131,6 +152,12 @@ pub fn setup(win: &Window, app: &gtk::Application) {
     add_toggle(win, "fullscreen", false, |w, _| w.toggle_fullscreen());
     add_toggle(win, "slideshow", false, Window::set_slideshow);
     add_toggle(win, "show-statusbar", true, Window::set_statusbar_visible);
+    add_toggle(
+        win,
+        "show-thumbnails",
+        false,
+        Window::set_thumbnails_visible,
+    );
 
     for (action, accels) in ACCELS {
         app.set_accels_for_action(action, accels);
@@ -157,6 +184,7 @@ impl Window {
         f(&mut opts.order);
         self.inner.scan_options.set(opts);
         self.inner.collection.borrow_mut().set_order(opts.order);
+        self.collection_changed();
         self.show_current();
     }
 }
@@ -211,6 +239,7 @@ pub fn build_header(zoom_label: &gtk::Label) -> gtk::HeaderBar {
     sort.append(Some("Descending"), Some("win.sort-descending"));
     menu.append_submenu(Some("Sort Images"), &sort);
     let image = gio::Menu::new();
+    image.append(Some("Properties"), Some("win.properties"));
     image.append(Some("Rotate Clockwise"), Some("win.rotate-cw"));
     image.append(Some("Rotate Anticlockwise"), Some("win.rotate-ccw"));
     image.append(Some("Flip Horizontally"), Some("win.flip-horizontal"));
@@ -219,6 +248,7 @@ pub fn build_header(zoom_label: &gtk::Label) -> gtk::HeaderBar {
     let view = gio::Menu::new();
     view.append(Some("Fullscreen"), Some("win.fullscreen"));
     view.append(Some("Slideshow"), Some("win.slideshow"));
+    view.append(Some("Thumbnails"), Some("win.show-thumbnails"));
     view.append(Some("Status Bar"), Some("win.show-statusbar"));
     menu.append_section(None, &view);
     let close = gio::Menu::new();

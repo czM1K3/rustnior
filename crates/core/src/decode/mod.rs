@@ -10,11 +10,13 @@ use crate::cancel::CancelToken;
 use crate::error::{DecodeError, Result};
 use crate::pixels::DecodedImage;
 
+mod animated;
 mod generic;
 mod jpeg;
 #[cfg(feature = "svg")]
 mod svg;
 
+pub use animated::AnimatedDecoder;
 pub use generic::GenericDecoder;
 pub use jpeg::JpegDecoder;
 #[cfg(feature = "svg")]
@@ -74,6 +76,7 @@ impl Default for Decoders {
         let mut decoders: Vec<Box<dyn Decoder>> = vec![Box::new(JpegDecoder)];
         #[cfg(feature = "svg")]
         decoders.push(Box::new(SvgDecoder::default()));
+        decoders.push(Box::new(AnimatedDecoder));
         decoders.push(Box::new(GenericDecoder));
         Self { decoders }
     }
@@ -155,7 +158,11 @@ mod tests {
         let jpeg = [0xFF, 0xD8, 0xFF, 0xE0];
         assert_eq!(d.find(&jpeg, Some("png")).map(|d| d.name()), Some("jpeg"));
         let png = b"\x89PNG\r\n\x1a\n";
-        assert_eq!(d.find(png, None).map(|d| d.name()), Some("generic"));
+        assert_eq!(d.find(png, None).map(|d| d.name()), Some("animated"));
+        assert_eq!(
+            d.find(b"BM", Some("bmp")).map(|d| d.name()),
+            Some("generic")
+        );
     }
 
     #[test]

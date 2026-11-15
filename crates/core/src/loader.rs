@@ -9,7 +9,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard};
 
-use crate::cache::ByteLru;
+use crate::cache::{ByteLru, Weighted};
 use crate::cancel::CancelToken;
 use crate::decode::{DecodeRequest, Decoders};
 use crate::error::DecodeError;
@@ -17,11 +17,11 @@ use crate::pixels::DecodedImage;
 
 pub const DEFAULT_CACHE_BYTES: usize = 768 * 1024 * 1024;
 
-#[derive(Debug, Clone)]
-pub enum LoadEvent {
+#[derive(Debug)]
+pub enum LoadEvent<V = DecodedImage> {
     Loaded {
         path: PathBuf,
-        image: Arc<DecodedImage>,
+        image: Arc<V>,
     },
     Failed {
         path: PathBuf,
@@ -29,7 +29,7 @@ pub enum LoadEvent {
     },
 }
 
-impl LoadEvent {
+impl<V> LoadEvent<V> {
     pub fn path(&self) -> &Path {
         match self {
             Self::Loaded { path, .. } | Self::Failed { path, .. } => path,
@@ -53,7 +53,8 @@ impl Default for LoaderConfig {
     }
 }
 
-type Sink = Box<dyn Fn(LoadEvent) + Send + Sync>;
+type Sink<V> = Box<dyn Fn(LoadEvent<V>) + Send + Sync>;
+type Work<V> = Box<dyn Fn(&Path, &DecodeRequest) -> crate::Result<V> + Send + Sync>;
 
 struct Job {
     path: PathBuf,
@@ -62,24 +63,24 @@ struct Job {
     cancel: CancelToken,
 }
 
-struct State {
+struct State<V> {
     queue: Vec<Job>,
     inflight: HashMap<PathBuf, CancelToken>,
-    cache: ByteLru<PathBuf, Arc<DecodedImage>>,
+    cache: ByteLru<PathBuf, Arc<V>>,
     seq: u64,
     target_size: Option<(u32, u32)>,
     shutdown: bool,
 }
 
-struct Shared {
-    state: Mutex<State>,
+struct Shared<V> {
+    state: Mutex<State<V>>,
     work: Condvar,
-    decoders: Arc<Decoders>,
-    sink: Sink,
+    job: Work<V>,
+    sink: Sink<V>,
 }
 
-impl Shared {
-    fn lock(&self) -> MutexGuard<'_, State> {
+impl<V> Shared<V> {
+    fn lock(&self) -> MutexGuard<'_, State<V>> {
         // A worker only panics outside the lock (decoder panics are caught), so
         // poisoning is not expected; recover the data rather than propagate.
         self.state
@@ -88,15 +89,32 @@ impl Shared {
     }
 }
 
-pub struct Loader {
-    shared: Arc<Shared>,
+/// Worker pool producing `V`s for paths (decoded images by default).
+pub struct Loader<V: Weighted + Send + Sync + 'static = DecodedImage> {
+    shared: Arc<Shared<V>>,
 }
 
-impl Loader {
+impl Loader<DecodedImage> {
+    /// A loader that decodes full images.
     pub fn new(
         decoders: Arc<Decoders>,
         config: LoaderConfig,
         sink: impl Fn(LoadEvent) + Send + Sync + 'static,
+    ) -> Self {
+        Self::with_job(
+            config,
+            move |path, req| decoders.decode_path(path, req),
+            sink,
+        )
+    }
+}
+
+impl<V: Weighted + Send + Sync + 'static> Loader<V> {
+    /// A loader running an arbitrary per-path job (e.g. thumbnailing).
+    pub fn with_job(
+        config: LoaderConfig,
+        job: impl Fn(&Path, &DecodeRequest) -> crate::Result<V> + Send + Sync + 'static,
+        sink: impl Fn(LoadEvent<V>) + Send + Sync + 'static,
     ) -> Self {
         let shared = Arc::new(Shared {
             state: Mutex::new(State {
@@ -108,7 +126,7 @@ impl Loader {
                 shutdown: false,
             }),
             work: Condvar::new(),
-            decoders,
+            job: Box::new(job),
             sink: Box::new(sink),
         });
         for i in 0..config.threads.max(1) {
@@ -124,12 +142,12 @@ impl Loader {
     }
 
     /// Returns a cached image, marking it recently used.
-    pub fn cached(&self, path: &Path) -> Option<Arc<DecodedImage>> {
+    pub fn cached(&self, path: &Path) -> Option<Arc<V>> {
         self.shared.lock().cache.get(path).cloned()
     }
 
     /// Seeds the cache, e.g. with an image decoded before the loader existed.
-    pub fn insert(&self, path: PathBuf, image: Arc<DecodedImage>) {
+    pub fn insert(&self, path: PathBuf, image: Arc<V>) {
         self.shared.lock().cache.insert(path, image);
     }
 
@@ -204,7 +222,7 @@ impl Loader {
     }
 }
 
-impl Drop for Loader {
+impl<V: Weighted + Send + Sync + 'static> Drop for Loader<V> {
     fn drop(&mut self) {
         let mut st = self.shared.lock();
         st.shutdown = true;
@@ -220,7 +238,7 @@ impl Drop for Loader {
     }
 }
 
-fn worker(shared: &Shared) {
+fn worker<V: Weighted>(shared: &Shared<V>) {
     loop {
         let (job, target_size) = {
             let mut st = shared.lock();
@@ -253,7 +271,7 @@ fn worker(shared: &Shared) {
         };
         let span = tracing::debug_span!("decode", path = %job.path.display());
         let started = std::time::Instant::now();
-        let result = span.in_scope(|| shared.decoders.decode_path(&job.path, &req));
+        let result = span.in_scope(|| (shared.job)(&job.path, &req));
         tracing::debug!(path = %job.path.display(), ms = started.elapsed().as_millis(), ok = result.is_ok(), "decoded");
 
         let event = {

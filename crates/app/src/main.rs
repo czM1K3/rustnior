@@ -1,11 +1,14 @@
 //! rustnior — a fast, minimal image viewer.
 
 mod actions;
+mod animation;
 mod dialogs;
 mod fullscreen;
 mod imageview;
 mod input;
+mod properties;
 mod texture;
+mod thumbstrip;
 mod window;
 
 use std::path::PathBuf;

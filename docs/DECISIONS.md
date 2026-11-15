@@ -32,3 +32,10 @@ Defaults chosen without asking, per the working process in CLAUDE.md.
   (prev/next, slideshow toggle + interval, fit, rotate, leave) that hides with the
   cursor after 2 s without pointer movement. Leaving fullscreen stops the slideshow.
 - **Slideshow** wraps around at the end; manual navigation restarts the countdown.
+- **Animations** are decoded fully (composited RGBA frames) up to 1 GiB of pixels;
+  bigger ones show their first frame as a still. Delays under 20 ms play at 100 ms,
+  as browsers do. Loop count is ignored (always loops).
+- **Thumbnails** use the freedesktop.org thumbnail cache (`~/.cache/thumbnails`):
+  existing thumbnails from file managers are reused when `Thumb::MTime` matches, and
+  new ones are written (0600, atomic rename) when the image was actually reduced.
+  The strip is hidden by default; toggle with `T` or the menu.

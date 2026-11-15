@@ -46,13 +46,13 @@ Legend: `[ ]` todo · `[x]` done · `(M#)` target milestone · `+` = beyond View
 - [x] `Esc`/`Q` quits in normal mode, `Ctrl+W` closes window (M1)
 
 ## Animation
-- [ ] Animated GIF, APNG, animated WebP playback (M4)
-- [ ] `P` pause/resume, `J` step one frame (M4)
+- [x] Animated GIF, APNG, animated WebP playback (M4)
+- [x] `P` pause/resume, `J` step one frame (M4)
 
 ## Information
-- [ ] Properties dialog `Alt+Return`: name, type, dimensions, file size, location, modified date, EXIF/IPTC (M4)
+- [x] Properties dialog `Alt+Return`: name, type, dimensions, file size, location, modified date, EXIF/IPTC (M4)
 - [x] Status bar: file name, dimensions, zoom %, position in collection, file size (M2)
-- [ ] Thumbnail strip (`+`, M4)
+- [x] Thumbnail strip (`+`, M4)
 - [x] Window title shows the file name (M1)
 
 ## File operations
