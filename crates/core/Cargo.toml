@@ -1,0 +1,25 @@
+[package]
+name = "rustnior-core"
+description = "Image loading, caching, folder scanning and transforms for rustnior"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+crossbeam-channel = "0.5.17"
+image = { version = "0.25", default-features = false, features = ["png", "gif", "webp", "bmp", "tiff", "ico", "tga", "pnm", "qoi", "hdr", "exr", "dds", "ff"] }
+kamadak-exif = "0.6.2"
+resvg = { version = "0.50.0", optional = true }
+thiserror.workspace = true
+tracing.workspace = true
+zune-core = "0.5.3"
+zune-jpeg = "0.5.15"
+
+
+[features]
+default = ["svg"]
+svg = ["dep:resvg"]

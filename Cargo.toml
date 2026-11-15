@@ -1,0 +1,31 @@
+[workspace]
+resolver = "3"
+members = ["crates/core", "crates/app"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.92"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/czM1K3/rustnior"
+
+[workspace.dependencies]
+rustnior-core = { path = "crates/core" }
+thiserror = "2"
+anyhow = "1"
+tracing = "0.1"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+unwrap_used = "deny"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true
+
+# Decoders are hot even in debug builds; keep dev builds usable.
+[profile.dev.package."*"]
+opt-level = 3

@@ -1,0 +1,23 @@
+[package]
+name = "rustnior"
+description = "A fast, minimal image viewer"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "rustnior"
+path = "src/main.rs"
+
+[dependencies]
+rustnior-core.workspace = true
+anyhow.workspace = true
+tracing.workspace = true
+clap = { version = "4.6.7", features = ["derive"] }
+async-channel = "2.5.0"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
+gtk = { version = "0.11", package = "gtk4", features = ["gnome_46"] }
