@@ -7,8 +7,12 @@ mod fileops;
 mod fullscreen;
 mod imageview;
 mod input;
+mod prefs;
 mod properties;
+mod settings;
+mod shortcuts;
 mod texture;
+mod theme;
 mod thumbstrip;
 mod window;
 
@@ -47,6 +51,7 @@ fn main() -> ExitCode {
 
     let cli = Cli::parse();
     let decoders = Arc::new(Decoders::default());
+    let config = settings::load();
 
     // Start decoding the first image before GTK initialises so the two overlap.
     let early = cli.paths.first().filter(|p| p.is_file()).map(|path| {
@@ -68,7 +73,7 @@ fn main() -> ExitCode {
 
     let early = std::cell::RefCell::new(early);
     app.connect_activate(move |app| {
-        let win = Window::new(app, Arc::clone(&decoders));
+        let win = Window::new(app, Arc::clone(&decoders), config.clone());
         win.present();
         win.open_paths(cli.paths.clone(), early.borrow_mut().take());
         if cli.slideshow {

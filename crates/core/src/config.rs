@@ -1,5 +1,6 @@
 //! User preferences, stored as TOML in the XDG config directory.
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -132,6 +133,7 @@ pub struct Config {
     /// `#rrggbb`; empty means the theme's window background.
     pub background: String,
     pub checkerboard: bool,
+    pub show_toolbar: bool,
     pub show_statusbar: bool,
     pub show_thumbnails: bool,
     pub start_maximized: bool,
@@ -142,6 +144,10 @@ pub struct Config {
     pub preload: u8,
 
     pub window: WindowState,
+
+    /// Overrides for keyboard shortcuts: action name (e.g. `"next"`) to
+    /// accelerators in GTK syntax (e.g. `["space", "<Alt>Right"]`).
+    pub shortcuts: BTreeMap<String, Vec<String>>,
 }
 
 impl Default for Config {
@@ -164,12 +170,14 @@ impl Default for Config {
             theme: ThemePref::System,
             background: String::new(),
             checkerboard: true,
+            show_toolbar: true,
             show_statusbar: true,
             show_thumbnails: false,
             start_maximized: false,
             cache_mib: 768,
             preload: 2,
             window: WindowState::default(),
+            shortcuts: BTreeMap::new(),
         }
     }
 }
@@ -304,6 +312,12 @@ mod tests {
             (1, 9, 1)
         );
         assert!(c.background.is_empty());
+    }
+
+    #[test]
+    fn shortcut_overrides_parse() {
+        let c = Config::from_toml("[shortcuts]\nnext = [\"n\", \"<Alt>Right\"]\n").expect("de");
+        assert_eq!(c.shortcuts.get("next").map(Vec::len), Some(2));
     }
 
     #[test]

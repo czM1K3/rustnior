@@ -5,40 +5,25 @@ use rustnior_core::{Orientation, SortKey, SortOrder};
 
 use crate::window::Window;
 
-/// (action, accelerators). Mirrors Viewnior's bindings plus common extras.
-const ACCELS: &[(&str, &[&str])] = &[
-    ("win.open", &["<Control>o"]),
-    ("win.open-folder", &["<Control>f"]),
-    ("win.close", &["<Control>w"]),
-    ("win.escape", &["Escape", "q"]),
-    ("win.fullscreen", &["F11"]),
-    ("win.slideshow", &["F5"]),
-    ("win.rotate-cw", &["<Control>r", "r"]),
-    ("win.rotate-ccw", &["<Control><Shift>r", "l"]),
-    ("win.flip-horizontal", &["h"]),
-    ("win.flip-vertical", &["v"]),
-    ("win.show-thumbnails", &["t"]),
-    ("win.animation-toggle", &["p"]),
-    ("win.animation-step", &["j"]),
-    ("win.properties", &["<Alt>Return", "<Alt>KP_Enter"]),
-    ("win.save", &["<Control>s"]),
-    ("win.save-as", &["<Control><Shift>s"]),
-    ("win.delete", &["Delete", "KP_Delete"]),
-    ("win.copy", &["<Control>c"]),
-    ("win.copy-path", &["<Control><Shift>c"]),
-    ("win.wallpaper", &["<Control>F8"]),
+/// Every shortcut: (action, description, default accelerators). Mirrors
+/// Viewnior's bindings plus common extras; drives both the accelerators and
+/// the shortcuts window. Users can override them in the config file.
+pub const SHORTCUTS: &[(&str, &str, &[&str])] = &[
     (
-        "win.next",
+        "next",
+        "Next image",
         &["space", "Page_Down", "<Alt>Right", "KP_Page_Down"],
     ),
     (
-        "win.prev",
+        "prev",
+        "Previous image",
         &["BackSpace", "Page_Up", "<Alt>Left", "KP_Page_Up"],
     ),
-    ("win.first", &["Home", "<Alt>Home", "KP_Home"]),
-    ("win.last", &["End", "<Alt>End", "KP_End"]),
+    ("first", "First image", &["Home", "<Alt>Home", "KP_Home"]),
+    ("last", "Last image", &["End", "<Alt>End", "KP_End"]),
     (
-        "win.zoom-in",
+        "zoom-in",
+        "Zoom in",
         &[
             "plus",
             "equal",
@@ -49,7 +34,8 @@ const ACCELS: &[(&str, &[&str])] = &[
         ],
     ),
     (
-        "win.zoom-out",
+        "zoom-out",
+        "Zoom out",
         &[
             "minus",
             "KP_Subtract",
@@ -57,11 +43,62 @@ const ACCELS: &[(&str, &[&str])] = &[
             "<Control>KP_Subtract",
         ],
     ),
-    ("win.zoom-fit", &["f", "0", "KP_0"]),
-    ("win.zoom-normal", &["1", "KP_1", "<Control>0"]),
-    ("win.zoom-2", &["2", "KP_2"]),
-    ("win.zoom-3", &["3", "KP_3"]),
+    ("zoom-fit", "Best fit", &["f", "0", "KP_0"]),
+    (
+        "zoom-normal",
+        "Normal size (100%)",
+        &["1", "KP_1", "<Control>0"],
+    ),
+    ("zoom-2", "Zoom 200%", &["2", "KP_2"]),
+    ("zoom-3", "Zoom 300%", &["3", "KP_3"]),
+    ("rotate-cw", "Rotate clockwise", &["<Control>r", "r"]),
+    (
+        "rotate-ccw",
+        "Rotate anticlockwise",
+        &["<Control><Shift>r", "l"],
+    ),
+    ("flip-horizontal", "Flip horizontally", &["h"]),
+    ("flip-vertical", "Flip vertically", &["v"]),
+    ("fullscreen", "Fullscreen", &["F11"]),
+    ("slideshow", "Slideshow", &["F5"]),
+    ("escape", "Leave fullscreen / quit", &["Escape", "q"]),
+    ("animation-toggle", "Pause/play animation", &["p"]),
+    ("animation-step", "Next animation frame", &["j"]),
+    ("open", "Open image", &["<Control>o"]),
+    ("open-folder", "Open folder", &["<Control>f"]),
+    ("save", "Save", &["<Control>s"]),
+    ("save-as", "Save as", &["<Control><Shift>s"]),
+    ("delete", "Move to trash", &["Delete", "KP_Delete"]),
+    ("copy", "Copy image", &["<Control>c"]),
+    ("copy-path", "Copy path", &["<Control><Shift>c"]),
+    ("wallpaper", "Set as wallpaper", &["<Control>F8"]),
+    (
+        "properties",
+        "Properties",
+        &["<Alt>Return", "<Alt>KP_Enter"],
+    ),
+    ("show-toolbar", "Toggle toolbar", &["<Control>h"]),
+    ("show-thumbnails", "Toggle thumbnails", &["t"]),
+    ("preferences", "Preferences", &["<Control>comma"]),
+    (
+        "shortcuts",
+        "Keyboard shortcuts",
+        &["<Control>question", "F1"],
+    ),
+    ("close", "Close window", &["<Control>w"]),
 ];
+
+/// Accelerators for `action`, honouring the user's overrides.
+pub fn accels_for(win: &Window, action: &str) -> Vec<String> {
+    if let Some(custom) = win.inner.config.borrow().shortcuts.get(action) {
+        return custom.clone();
+    }
+    SHORTCUTS
+        .iter()
+        .find(|(a, _, _)| *a == action)
+        .map(|(_, _, keys)| keys.iter().map(|k| (*k).to_owned()).collect())
+        .unwrap_or_default()
+}
 
 pub fn setup(win: &Window, app: &gtk::Application) {
     let w = &win.inner.window;
@@ -106,6 +143,9 @@ pub fn setup(win: &Window, app: &gtk::Application) {
     add("open-with", Box::new(Window::open_with));
     add("open-location", Box::new(Window::open_containing_folder));
     add("reload", Box::new(Window::reload));
+    add("preferences", Box::new(crate::prefs::show));
+    add("shortcuts", Box::new(crate::shortcuts::show));
+    add("about", Box::new(show_about));
     add(
         "rotate-cw",
         Box::new(|w| w.transform(Orientation::rotate_cw)),
@@ -137,7 +177,7 @@ pub fn setup(win: &Window, app: &gtk::Application) {
     let sort = gio::SimpleAction::new_stateful(
         "sort-by",
         Some(glib::VariantTy::STRING),
-        &"name".to_variant(),
+        &sort_key_name(win.inner.config.borrow().sort_by.into()).to_variant(),
     );
     let weak = std::rc::Rc::downgrade(&win.inner);
     sort.connect_activate(move |a, param| {
@@ -154,7 +194,11 @@ pub fn setup(win: &Window, app: &gtk::Application) {
     });
     w.add_action(&sort);
 
-    let desc = gio::SimpleAction::new_stateful("sort-descending", None, &false.to_variant());
+    let desc = gio::SimpleAction::new_stateful(
+        "sort-descending",
+        None,
+        &win.inner.config.borrow().sort_descending.to_variant(),
+    );
     let weak = std::rc::Rc::downgrade(&win.inner);
     desc.connect_activate(move |a, _| {
         let Some(inner) = weak.upgrade() else { return };
@@ -166,16 +210,39 @@ pub fn setup(win: &Window, app: &gtk::Application) {
 
     add_toggle(win, "fullscreen", false, |w, _| w.toggle_fullscreen());
     add_toggle(win, "slideshow", false, Window::set_slideshow);
-    add_toggle(win, "show-statusbar", true, Window::set_statusbar_visible);
+    let c = win.inner.config.borrow().clone();
+    add_toggle(
+        win,
+        "show-toolbar",
+        c.show_toolbar,
+        Window::set_toolbar_visible,
+    );
+    add_toggle(
+        win,
+        "show-statusbar",
+        c.show_statusbar,
+        Window::set_statusbar_visible,
+    );
     add_toggle(
         win,
         "show-thumbnails",
-        false,
+        c.show_thumbnails,
         Window::set_thumbnails_visible,
     );
 
-    for (action, accels) in ACCELS {
-        app.set_accels_for_action(action, accels);
+    for (action, _, _) in SHORTCUTS {
+        let accels = accels_for(win, action);
+        for a in &accels {
+            if gtk::accelerator_parse(a).is_none() {
+                tracing::warn!(action, accel = %a, "ignoring invalid shortcut");
+            }
+        }
+        let refs: Vec<&str> = accels
+            .iter()
+            .map(String::as_str)
+            .filter(|a| gtk::accelerator_parse(*a).is_some())
+            .collect();
+        app.set_accels_for_action(&format!("win.{action}"), &refs);
     }
 }
 
@@ -199,9 +266,46 @@ impl Window {
         f(&mut opts.order);
         self.inner.scan_options.set(opts);
         self.inner.collection.borrow_mut().set_order(opts.order);
+        {
+            let mut c = self.inner.config.borrow_mut();
+            c.sort_by = opts.order.key.into();
+            c.sort_descending = opts.order.descending;
+        }
         self.collection_changed();
         self.show_current();
     }
+}
+
+fn sort_key_name(k: SortKey) -> &'static str {
+    match k {
+        SortKey::Name => "name",
+        SortKey::Modified => "modified",
+        SortKey::Size => "size",
+    }
+}
+
+/// Sets a boolean action's state without activating it.
+pub fn set_action_state(window: &gtk::ApplicationWindow, name: &str, on: bool) {
+    if let Some(a) = window
+        .lookup_action(name)
+        .and_then(|a| a.downcast::<gio::SimpleAction>().ok())
+    {
+        a.set_state(&on.to_variant());
+    }
+}
+
+fn show_about(win: &Window) {
+    gtk::AboutDialog::builder()
+        .transient_for(win.window())
+        .modal(true)
+        .program_name("rustnior")
+        .logo_icon_name(crate::APP_ID)
+        .version(env!("CARGO_PKG_VERSION"))
+        .comments("A fast, minimal image viewer")
+        .license_type(gtk::License::Gpl30)
+        .website("https://github.com/czM1K3/rustnior")
+        .build()
+        .present();
 }
 
 pub fn build_header(zoom_label: &gtk::Label) -> gtk::HeaderBar {
@@ -272,12 +376,16 @@ pub fn build_header(zoom_label: &gtk::Label) -> gtk::HeaderBar {
     image.append(Some("Flip Vertically"), Some("win.flip-vertical"));
     menu.append_section(None, &image);
     let view = gio::Menu::new();
+    view.append(Some("Toolbar"), Some("win.show-toolbar"));
     view.append(Some("Fullscreen"), Some("win.fullscreen"));
     view.append(Some("Slideshow"), Some("win.slideshow"));
     view.append(Some("Thumbnails"), Some("win.show-thumbnails"));
     view.append(Some("Status Bar"), Some("win.show-statusbar"));
     menu.append_section(None, &view);
     let close = gio::Menu::new();
+    close.append(Some("Preferences"), Some("win.preferences"));
+    close.append(Some("Keyboard Shortcuts"), Some("win.shortcuts"));
+    close.append(Some("About rustnior"), Some("win.about"));
     close.append(Some("Close"), Some("win.close"));
     menu.append_section(None, &close);
     let menu_button = gtk::MenuButton::builder()
@@ -336,6 +444,7 @@ pub fn context_menu() -> gio::Menu {
     file.append(Some("Move to Trash"), Some("win.delete"));
     menu.append_section(None, &file);
     let props = gio::Menu::new();
+    props.append(Some("Toolbar"), Some("win.show-toolbar"));
     props.append(Some("Fullscreen"), Some("win.fullscreen"));
     props.append(Some("Properties"), Some("win.properties"));
     menu.append_section(None, &props);

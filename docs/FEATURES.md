@@ -11,7 +11,7 @@ Legend: `[ ]` todo · `[x]` done · `(M#)` target milestone · `+` = beyond View
 - [x] Open Image… (`Ctrl+O`) and Open Folder… (`Ctrl+F`) file choosers (M2)
 - [x] Drag-and-drop files/folders/URIs onto the window (M2)
 - [x] "Browse only selected images": opening several files limits the collection to them (M2)
-- [ ] Show hidden files option (M6)
+- [x] Show hidden files option (M6)
 - [x] Reload current file (M5)
 
 ## Navigation
@@ -25,11 +25,11 @@ Legend: `[ ]` todo · `[x]` done · `(M#)` target milestone · `+` = beyond View
 ## Zoom & pan
 - [x] Best fit (`F`, `0`, `KP_0`), normal size 100% (`1`, `Ctrl+0`), 200% (`2`), 300% (`3`) (M1)
 - [x] Zoom in (`+`, `=`, `KP_Add`, `Ctrl++`, `Ctrl+=`), zoom out (`-`, `KP_Subtract`, `Ctrl+-`) (M1)
-- [ ] Scroll-wheel behaviour (pref): zoom (default) / navigate / scroll; `Ctrl+wheel` always zooms around the pointer (M1/M6)
+- [x] Scroll-wheel behaviour (pref): zoom (default) / navigate / scroll; `Ctrl+wheel` always zooms around the pointer (M1/M6)
 - [x] Smooth zoom animation (`+`) (M1)
 - [x] Pan by dragging; keyboard panning with arrows (step) and `Shift+arrows` (page) (M1)
-- [ ] Initial zoom mode pref: smart (fit if larger, else 100%) / 100% / fit / last used (M1/M6)
-- [ ] "Smooth images" pref (filtering on/off) (M6)
+- [x] Initial zoom mode pref: smart (fit if larger, else 100%) / 100% / fit / last used (M1/M6)
+- [x] "Smooth images" pref (filtering on/off) (M6)
 - [ ] Adjust window size to the image (M6)
 
 ## Transform
@@ -42,7 +42,7 @@ Legend: `[ ]` todo · `[x]` done · `(M#)` target milestone · `+` = beyond View
 - [x] Fullscreen `F11` (toggle), `Esc` leaves; auto-hiding toolbar/cursor (M3)
 - [x] Fit image when entering fullscreen (pref) (M3)
 - [x] Slideshow `F5`, configurable interval (default 5 s); `Esc` stops (M3)
-- [ ] Double-click behaviour (pref): zoom (default, toggles fit↔100%) / fullscreen / next (M3/M6)
+- [x] Double-click behaviour (pref): zoom (default, toggles fit↔100%) / fullscreen / next (M3/M6)
 - [x] `Esc`/`Q` quits in normal mode, `Ctrl+W` closes window (M1)
 
 ## Animation
@@ -66,12 +66,12 @@ Legend: `[ ]` todo · `[x]` done · `(M#)` target milestone · `+` = beyond View
 - [ ] Crop — **non-goal** (editing beyond rotate/flip)
 
 ## UI
-- [ ] Toggleable toolbar, status bar, scrollbars; menu via header-bar menu button (M2/M6)
+- [x] Toggleable toolbar, status bar, scrollbars; menu via header-bar menu button (M2/M6)
 - [x] Right-click context menu (M5)
-- [ ] Dark/light theme following the system (M6)
-- [ ] Background colour pref ("dark background" in Viewnior) + optional checkerboard for transparency (M1/M6)
-- [ ] Remember window size/position(*), maximised state, toolbar visibility, last zoom (M6)
-- [ ] Preferences dialog (M6)
+- [x] Dark/light theme following the system (M6)
+- [x] Background colour pref ("dark background" in Viewnior) + optional checkerboard for transparency (M1/M6)
+- [x] Remember window size/position(*), maximised state, toolbar visibility, last zoom (M6)
+- [x] Preferences dialog (M6)
 - [x] Error message area for unreadable files (M2)
 
 (*) Wayland does not let clients position windows; position is restored on X11 only.

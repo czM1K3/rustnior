@@ -54,3 +54,21 @@ Defaults chosen without asking, per the working process in CLAUDE.md.
   XFCE, KDE Plasma, LXDE, LXQt, sway and Hyprland, then the XDG wallpaper portal (used
   first inside Flatpak), then `feh`/`nitrogen`.
 - **Crop** from Viewnior is intentionally left out (non-goal: editing).
+- **Config** lives in `$XDG_CONFIG_HOME/rustnior/config.toml` (via `directories`). It
+  is loaded before GTK starts, unknown keys are ignored, missing keys default and
+  out-of-range values are clamped, so a bad edit never stops the viewer from opening.
+  Preferences are saved immediately on change; window size/maximised state and view
+  toggles are saved on close.
+- **Window position is not restored**: GTK4 has no API to place toplevel windows (and
+  Wayland forbids it). Size and maximised state are restored.
+- **Shortcuts** are a single table (`actions::SHORTCUTS`) that drives the accelerators
+  and the Shortcuts window; `[shortcuts]` in the config overrides any action's keys.
+  Extra keys: `Ctrl+,` preferences, `F1`/`Ctrl+?` shortcuts, `Ctrl+H` toolbar,
+  `T` thumbnails.
+- **Theme**: on GTK ≥ 4.20 the app sets `gtk-interface-color-scheme` (GTK then follows
+  the desktop itself for "System"); on older GTK it reads `color-scheme` from the XDG
+  settings portal and follows changes live. Themes that only ship a dark (or light)
+  variant, or a `GTK_THEME` environment override, take precedence — as for any GTK app.
+- **Preferences** use a `Stack` + `StackSwitcher` instead of a `Notebook`. Known
+  upstream noise: GTK 4.24 prints "GtkImage reported baselines…" warnings for every
+  `GtkSwitch` (reproduced with a bare switch and stock Adwaita); harmless.

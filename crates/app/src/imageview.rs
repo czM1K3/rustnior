@@ -221,6 +221,20 @@ impl ImageView {
         self.queue_draw();
     }
 
+    /// Whether best fit may enlarge images smaller than the view.
+    pub fn set_upscale_on_fit(&self, on: bool) {
+        let imp = self.imp();
+        let mut vp = imp.viewport.borrow_mut();
+        if vp.upscale_on_fit != on {
+            vp.upscale_on_fit = on;
+            if vp.mode() == ZoomMode::Fit {
+                vp.fit();
+            }
+            drop(vp);
+            self.changed();
+        }
+    }
+
     pub fn fit(&self) {
         self.stop_animation();
         self.imp().viewport.borrow_mut().fit();

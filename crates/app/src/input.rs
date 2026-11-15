@@ -5,18 +5,10 @@ use std::rc::Rc;
 
 use gtk::{gdk, gio, glib, prelude::*};
 
+use rustnior_core::config::{ClickPref, WheelPref};
+
 use crate::imageview::PAN_STEP;
 use crate::window::Window;
-
-/// What the mouse wheel does without modifiers (Viewnior's "behavior-wheel").
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
-#[allow(dead_code)] // Navigate/Scroll are selected via preferences (M6).
-pub enum WheelAction {
-    #[default]
-    Zoom,
-    Navigate,
-    Scroll,
-}
 
 pub fn setup(win: &Window) {
     setup_keys(win);
@@ -95,9 +87,9 @@ fn setup_scroll(win: &Window) {
         }
 
         let mode = if ctrl {
-            WheelAction::Zoom
+            WheelPref::Zoom
         } else {
-            w.wheel_action()
+            w.inner.config.borrow().wheel
         };
         // Horizontal wheel and Shift+wheel navigate in zoom mode (Viewnior).
         let horizontal = if dx != 0.0 {
@@ -108,24 +100,24 @@ fn setup_scroll(win: &Window) {
             0.0
         };
         match mode {
-            WheelAction::Zoom if horizontal != 0.0 && !ctrl => {
+            WheelPref::Zoom if horizontal != 0.0 && !ctrl => {
                 w.navigate(if horizontal > 0.0 { 1 } else { -1 });
             }
-            WheelAction::Zoom => {
+            WheelPref::Zoom => {
                 if dy != 0.0 {
                     view.zoom_step_at(if dy < 0.0 { 1 } else { -1 }, anchor);
                 }
             }
-            WheelAction::Navigate if shift || dx != 0.0 => {
+            WheelPref::Navigate if shift || dx != 0.0 => {
                 let d = if dx != 0.0 { dx } else { dy };
                 view.zoom_step_at(if d < 0.0 { 1 } else { -1 }, anchor);
             }
-            WheelAction::Navigate => {
+            WheelPref::Navigate => {
                 if dy != 0.0 {
                     w.navigate(if dy > 0.0 { 1 } else { -1 });
                 }
             }
-            WheelAction::Scroll => {
+            WheelPref::Scroll => {
                 let (fx, fy) = if shift { (-dy, 0.0) } else { (-dx, -dy) };
                 view.pan_pages(fx * 0.25, fy * 0.25);
             }
@@ -135,7 +127,7 @@ fn setup_scroll(win: &Window) {
     view.add_controller(scroll);
 }
 
-/// Double-click toggles between best fit and 100% (Viewnior's default).
+/// Double-click: toggle fit/100% (Viewnior's default), fullscreen, or next.
 fn setup_clicks(win: &Window) {
     let click = gtk::GestureClick::builder()
         .button(gdk::BUTTON_PRIMARY)
@@ -143,13 +135,22 @@ fn setup_clicks(win: &Window) {
     let weak = Rc::downgrade(&win.inner);
     click.connect_pressed(move |_, n, _, _| {
         let Some(inner) = weak.upgrade() else { return };
-        if n == 2 {
-            let view = &inner.view;
-            if view.zoom_mode() == rustnior_core::viewport::ZoomMode::Fit {
-                view.set_zoom(1.0);
-            } else {
-                view.fit();
+        if n != 2 {
+            return;
+        }
+        let action = inner.config.borrow().double_click;
+        let w = Window { inner };
+        match action {
+            ClickPref::Zoom => {
+                let view = &w.inner.view;
+                if view.zoom_mode() == rustnior_core::viewport::ZoomMode::Fit {
+                    view.set_zoom(1.0);
+                } else {
+                    view.fit();
+                }
             }
+            ClickPref::Fullscreen => w.toggle_fullscreen(),
+            ClickPref::Next => w.navigate(1),
         }
     });
     win.inner.view.add_controller(click);
@@ -194,11 +195,4 @@ fn setup_drop(win: &Window) {
         true
     });
     win.inner.window.add_controller(drop);
-}
-
-impl Window {
-    pub fn wheel_action(&self) -> WheelAction {
-        // Becomes a preference in M6.
-        WheelAction::default()
-    }
 }

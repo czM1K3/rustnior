@@ -7,6 +7,7 @@ use std::sync::Arc;
 
 use gtk::{glib, prelude::*};
 use rustnior_core::collection::absolute;
+use rustnior_core::config::ZoomPref;
 use rustnior_core::{
     Collection, Config, DecodedImage, Decoders, LoadEvent, Loader, LoaderConfig, Orientation,
     Result as DecodeResult, ScanOptions,
@@ -19,9 +20,6 @@ use crate::thumbstrip::ThumbStrip;
 
 /// An image decoded before the window existed (see `main`).
 pub type EarlyLoad = (PathBuf, DecodeResult<DecodedImage>);
-
-/// How many images on each side of the current one are preloaded.
-const PRELOAD_RADIUS: usize = 2;
 
 #[derive(Clone)]
 pub struct Window {
@@ -51,8 +49,6 @@ pub(crate) struct Inner {
     pub image_orientation: Cell<Orientation>,
     /// Rotations/flips the user applied to the shown image (unsaved).
     pub user_orientation: Cell<Orientation>,
-    pub show_statusbar: Cell<bool>,
-    pub show_thumbnails: Cell<bool>,
     pub animator: RefCell<Option<Rc<Animator>>>,
     pub config: RefCell<Config>,
     pub toast: Toast,
@@ -153,12 +149,13 @@ impl StatusBar {
 }
 
 impl Window {
-    pub fn new(app: &gtk::Application, decoders: Arc<Decoders>) -> Self {
+    pub fn new(app: &gtk::Application, decoders: Arc<Decoders>, config: Config) -> Self {
         let window = gtk::ApplicationWindow::builder()
             .application(app)
             .title("rustnior")
-            .default_width(1000)
-            .default_height(700)
+            .default_width(config.window.width)
+            .default_height(config.window.height)
+            .maximized(config.window.maximized || config.start_maximized)
             .build();
 
         let view = ImageView::new();
@@ -196,7 +193,11 @@ impl Window {
 
         // Loader events arrive on worker threads; forward them to the main loop.
         let (tx, rx) = async_channel::unbounded::<LoadEvent>();
-        let loader = Loader::new(decoders, LoaderConfig::default(), move |ev| {
+        let loader_config = LoaderConfig {
+            cache_bytes: config.cache_mib as usize * 1024 * 1024,
+            ..LoaderConfig::default()
+        };
+        let loader = Loader::new(decoders, loader_config, move |ev| {
             let _ = tx.send_blocking(ev);
         });
 
@@ -213,16 +214,17 @@ impl Window {
                 zoom_label,
                 loader,
                 collection: RefCell::new(Collection::default()),
-                scan_options: Cell::new(ScanOptions::default()),
+                scan_options: Cell::new(ScanOptions {
+                    show_hidden: config.show_hidden,
+                    order: config.sort_order(),
+                }),
                 shown: RefCell::new(None),
                 early_pending: RefCell::new(None),
                 scan_generation: Cell::new(0),
                 image_orientation: Cell::new(Orientation::IDENTITY),
                 user_orientation: Cell::new(Orientation::IDENTITY),
-                show_statusbar: Cell::new(true),
-                show_thumbnails: Cell::new(false),
                 animator: RefCell::new(None),
-                config: RefCell::new(Config::default()),
+                config: RefCell::new(config),
                 toast,
                 closing: Cell::new(false),
             }),
@@ -268,12 +270,82 @@ impl Window {
                 inner.status.zoom.set_text(&pct);
             }
         ));
+        this.apply_config();
         this.show_message(Some("Open an image with Ctrl+O, or drop one here"));
         this
     }
 
+    /// Persists window geometry and settings.
     fn on_close(&self) {
-        tracing::debug!("window closing");
+        let w = &self.inner.window;
+        let mut c = self.inner.config.borrow_mut();
+        c.window.maximized = w.is_maximized();
+        if !w.is_maximized() && !w.is_fullscreen() {
+            let (width, height) = w.default_size();
+            if width > 0 && height > 0 {
+                c.window.width = width;
+                c.window.height = height;
+            }
+        }
+        crate::settings::save(&c);
+    }
+
+    /// Applies every preference to the UI. Called at startup and whenever
+    /// the preferences dialog changes something.
+    pub fn apply_config(&self) {
+        let inner = &self.inner;
+        let c = inner.config.borrow().clone();
+        let view = &inner.view;
+        view.set_smooth(c.smooth_images);
+        view.set_checkerboard(c.checkerboard);
+        view.set_background(
+            c.background_rgb()
+                .map(|(r, g, b)| gtk::gdk::RGBA::new(r, g, b, 1.0)),
+        );
+        view.set_upscale_on_fit(c.zoom_mode == ZoomPref::Fit);
+        inner.fs.interval.set_value(f64::from(c.slideshow_seconds));
+        inner
+            .loader
+            .set_cache_budget(c.cache_mib as usize * 1024 * 1024);
+        crate::theme::apply(c.theme);
+
+        self.set_toolbar_visible(c.show_toolbar);
+        self.set_statusbar_visible(c.show_statusbar);
+        self.set_thumbnails_visible(c.show_thumbnails);
+        for (name, on) in [
+            ("show-toolbar", c.show_toolbar),
+            ("show-statusbar", c.show_statusbar),
+            ("show-thumbnails", c.show_thumbnails),
+        ] {
+            crate::actions::set_action_state(&inner.window, name, on);
+        }
+
+        // Hidden files or sort order changed: rebuild the collection.
+        let opts = ScanOptions {
+            show_hidden: c.show_hidden,
+            order: c.sort_order(),
+        };
+        let old = inner.scan_options.replace(opts);
+        if old.order != opts.order {
+            inner.collection.borrow_mut().set_order(opts.order);
+            self.collection_changed();
+        }
+        if old.show_hidden != opts.show_hidden
+            && let Some(dir) = self
+                .current_path()
+                .and_then(|p| p.parent().map(Path::to_owned))
+            && inner
+                .collection
+                .borrow()
+                .entries()
+                .iter()
+                .all(|e| e.path.parent() == Some(&dir))
+        {
+            // Re-list the folder, staying on the current image.
+            if let Some(cur) = self.current_path() {
+                self.open_paths_now(vec![cur], None);
+            }
+        }
     }
 
     pub fn present(&self) {
@@ -411,11 +483,12 @@ impl Window {
                 self.clear();
                 return;
             };
-            let mut want: Vec<PathBuf> = Vec::with_capacity(1 + 2 * PRELOAD_RADIUS);
+            let radius = usize::from(inner.config.borrow().preload);
+            let mut want: Vec<PathBuf> = Vec::with_capacity(1 + 2 * radius);
             if inner.early_pending.borrow().as_ref() != Some(&entry.path) {
                 want.push(entry.path.clone());
             }
-            want.extend(c.neighbours(PRELOAD_RADIUS).into_iter().map(Path::to_owned));
+            want.extend(c.neighbours(radius).into_iter().map(Path::to_owned));
             (entry.path.clone(), want)
         };
         self.update_status();
@@ -470,7 +543,13 @@ impl Window {
         }
         self.inner.image_orientation.set(img.orientation);
         self.inner.user_orientation.set(Orientation::IDENTITY);
-        self.inner.view.set_texture(texture, img.orientation, true);
+        let mode = self.inner.config.borrow().zoom_mode;
+        self.inner
+            .view
+            .set_texture(texture, img.orientation, mode != ZoomPref::LastUsed);
+        if mode == ZoomPref::Normal {
+            self.inner.view.set_zoom(1.0);
+        }
         self.inner.shown.replace(Some(path.to_owned()));
         self.show_message(None);
         self.update_status();
@@ -498,7 +577,7 @@ impl Window {
 
     /// Shows or hides the thumbnail strip (hidden in fullscreen).
     pub fn set_thumbnails_visible(&self, on: bool) {
-        self.inner.show_thumbnails.set(on);
+        self.inner.config.borrow_mut().show_thumbnails = on;
         self.inner
             .strip
             .root
@@ -508,9 +587,17 @@ impl Window {
             .select(self.inner.collection.borrow().current_index());
     }
 
+    /// Shows or hides the header bar (hidden in fullscreen anyway).
+    pub fn set_toolbar_visible(&self, on: bool) {
+        self.inner.config.borrow_mut().show_toolbar = on;
+        self.inner
+            .header
+            .set_visible(on && !self.inner.window.is_fullscreen());
+    }
+
     /// Shows or hides the status bar (always hidden in fullscreen).
     pub fn set_statusbar_visible(&self, on: bool) {
-        self.inner.show_statusbar.set(on);
+        self.inner.config.borrow_mut().show_statusbar = on;
         self.inner
             .status
             .root

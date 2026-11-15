@@ -4,7 +4,7 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::time::Duration;
 
-use gtk::{gio, glib, prelude::*};
+use gtk::{glib, prelude::*};
 
 use crate::window::Window;
 
@@ -20,8 +20,6 @@ pub struct FsUi {
     slideshow: Cell<bool>,
     last_pointer: Cell<(f64, f64)>,
     hovered: Rc<Cell<bool>>,
-    /// Viewnior's "fit-on-fullscreen" preference.
-    pub fit_on_fullscreen: Cell<bool>,
 }
 
 impl FsUi {
@@ -102,7 +100,6 @@ impl FsUi {
             slideshow_timer: RefCell::new(None),
             slideshow: Cell::new(false),
             last_pointer: Cell::new((-1.0, -1.0)),
-            fit_on_fullscreen: Cell::new(true),
         }
     }
 }
@@ -134,8 +131,9 @@ pub fn setup(win: &Window) {
     inner.overlay.add_controller(motion);
 
     let weak = Rc::downgrade(inner);
-    inner.fs.interval.connect_value_changed(move |_| {
+    inner.fs.interval.connect_value_changed(move |spin| {
         if let Some(inner) = weak.upgrade() {
+            inner.config.borrow_mut().slideshow_seconds = spin.value() as u32;
             Window { inner }.restart_slideshow_timer();
         }
     });
@@ -164,19 +162,21 @@ impl Window {
 
     fn on_fullscreen_changed(&self, fullscreen: bool) {
         let inner = &self.inner;
-        inner.header.set_visible(!fullscreen);
+        inner
+            .header
+            .set_visible(!fullscreen && inner.config.borrow().show_toolbar);
         inner
             .status
             .root
-            .set_visible(!fullscreen && inner.show_statusbar.get());
+            .set_visible(!fullscreen && inner.config.borrow().show_statusbar);
         inner
             .strip
             .root
-            .set_visible(!fullscreen && inner.show_thumbnails.get());
+            .set_visible(!fullscreen && inner.config.borrow().show_thumbnails);
         inner.fs.revealer.set_visible(fullscreen);
-        set_action_state(&inner.window, "fullscreen", fullscreen);
+        crate::actions::set_action_state(&inner.window, "fullscreen", fullscreen);
         if fullscreen {
-            if inner.fs.fit_on_fullscreen.get() {
+            if inner.config.borrow().fit_on_fullscreen {
                 inner.view.fit();
             }
             self.reveal_controls();
@@ -222,7 +222,7 @@ impl Window {
     pub fn set_slideshow(&self, on: bool) {
         let inner = &self.inner;
         inner.fs.slideshow.set(on);
-        set_action_state(&inner.window, "slideshow", on);
+        crate::actions::set_action_state(&inner.window, "slideshow", on);
         if on && !inner.window.is_fullscreen() {
             inner.window.fullscreen();
         }
@@ -247,14 +247,5 @@ impl Window {
             Window { inner }.navigate(1);
         });
         fs.slideshow_timer.replace(Some(id));
-    }
-}
-
-fn set_action_state(window: &gtk::ApplicationWindow, name: &str, on: bool) {
-    if let Some(a) = window
-        .lookup_action(name)
-        .and_then(|a| a.downcast::<gio::SimpleAction>().ok())
-    {
-        a.set_state(&on.to_variant());
     }
 }
