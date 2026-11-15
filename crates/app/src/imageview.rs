@@ -69,6 +69,13 @@ mod imp {
             obj.set_overflow(gtk::Overflow::Hidden);
             obj.setup_controllers();
         }
+
+        fn dispose(&self) {
+            // Popovers (context menu) are our children.
+            while let Some(child) = self.obj().first_child() {
+                child.unparent();
+            }
+        }
     }
 
     impl WidgetImpl for ImageView {
@@ -82,6 +89,13 @@ mod imp {
                 .borrow_mut()
                 .set_view_size(f64::from(width), f64::from(height), dpr);
             self.obj().emit_view_changed();
+            let mut child = self.obj().first_child();
+            while let Some(c) = child {
+                if let Some(p) = c.downcast_ref::<gtk::Popover>() {
+                    p.present();
+                }
+                child = c.next_sibling();
+            }
         }
 
         fn snapshot(&self, snapshot: &gtk::Snapshot) {

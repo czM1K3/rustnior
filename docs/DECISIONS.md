@@ -39,3 +39,18 @@ Defaults chosen without asking, per the working process in CLAUDE.md.
   existing thumbnails from file managers are reused when `Thumb::MTime` matches, and
   new ones are written (0600, atomic rename) when the image was actually reduced.
   The strip is hidden by default; toggle with `T` or the menu.
+- **Lossless JPEG rotation** is done by rewriting the EXIF orientation tag (patched in
+  place, or an EXIF block is inserted/rebuilt), so JPEG scan data never changes. Every
+  mainstream viewer, browser and photo tool honours the tag. Other formats are
+  re-encoded with the pixels transformed; animations cannot be rotated-and-saved.
+  `Save As` to a JPEG from a JPEG is also lossless; other targets are encoded by
+  extension (JPEG quality and PNG compression from preferences, alpha flattened on
+  white for JPEG).
+- **Unsaved rotations** follow Viewnior's "behavior-modify" (ask by default) when
+  navigating, opening, or closing the window. During a slideshow they are discarded.
+- **Copy Path** puts both a file reference (pastes as a file in file managers) and the
+  plain path (pastes as text) on the clipboard.
+- **Wallpaper**: desktop-specific commands for GNOME/Unity/Budgie, Cinnamon, MATE,
+  XFCE, KDE Plasma, LXDE, LXQt, sway and Hyprland, then the XDG wallpaper portal (used
+  first inside Flatpak), then `feh`/`nitrogen`.
+- **Crop** from Viewnior is intentionally left out (non-goal: editing).

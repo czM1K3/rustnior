@@ -12,7 +12,7 @@ Legend: `[ ]` todo · `[x]` done · `(M#)` target milestone · `+` = beyond View
 - [x] Drag-and-drop files/folders/URIs onto the window (M2)
 - [x] "Browse only selected images": opening several files limits the collection to them (M2)
 - [ ] Show hidden files option (M6)
-- [ ] Reload current file (M5)
+- [x] Reload current file (M5)
 
 ## Navigation
 - [x] Next/previous in folder: `Space`/`BackSpace`, `Page Down`/`Page Up`, `Alt+Right`/`Alt+Left` (M2)
@@ -36,7 +36,7 @@ Legend: `[ ]` todo · `[x]` done · `(M#)` target milestone · `+` = beyond View
 - [x] Rotate clockwise `Ctrl+R` (+ `R`), anticlockwise `Ctrl+Shift+R` (+ `L`) (M3)
 - [x] Flip horizontal `H`, flip vertical `V` (M3)
 - [x] Respect EXIF orientation automatically (M3)
-- [ ] On navigating away from a modified image: ask / auto-save / ignore (pref) (M5)
+- [x] On navigating away from a modified image: ask / auto-save / ignore (pref) (M5)
 
 ## Modes
 - [x] Fullscreen `F11` (toggle), `Esc` leaves; auto-hiding toolbar/cursor (M3)
@@ -56,18 +56,18 @@ Legend: `[ ]` todo · `[x]` done · `(M#)` target milestone · `+` = beyond View
 - [x] Window title shows the file name (M1)
 
 ## File operations
-- [ ] Save `Ctrl+S` (write rotated/flipped image back), Save as… (`Ctrl+Shift+S`, `+`) (M5)
-- [ ] Lossless JPEG rotation (EXIF orientation tag rewrite, or re-encode with a warning) (M5)
+- [x] Save `Ctrl+S` (write rotated/flipped image back), Save as… (`Ctrl+Shift+S`, `+`) (M5)
+- [x] Lossless JPEG rotation (EXIF orientation tag rewrite, or re-encode with a warning) (M5)
 - [ ] JPEG quality / PNG compression prefs (M5/M6)
-- [ ] Delete `Delete` → trash, optional confirmation (pref, default on) (M5)
-- [ ] Copy image to clipboard `Ctrl+C`, copy path `Ctrl+Shift+C` (`+`) (M5)
-- [ ] Set as wallpaper `Ctrl+F8` (GNOME, KDE, XFCE, MATE, Cinnamon, LXDE, Fluxbox/Nitrogen/feh fallback) (M5)
-- [ ] Open with… / open containing folder (M5)
+- [x] Delete `Delete` → trash, optional confirmation (pref, default on) (M5)
+- [x] Copy image to clipboard `Ctrl+C`, copy path `Ctrl+Shift+C` (`+`) (M5)
+- [x] Set as wallpaper `Ctrl+F8` (GNOME, KDE, XFCE, MATE, Cinnamon, LXDE, Fluxbox/Nitrogen/feh fallback) (M5)
+- [x] Open with… / open containing folder (M5)
 - [ ] Crop — **non-goal** (editing beyond rotate/flip)
 
 ## UI
 - [ ] Toggleable toolbar, status bar, scrollbars; menu via header-bar menu button (M2/M6)
-- [ ] Right-click context menu (M5)
+- [x] Right-click context menu (M5)
 - [ ] Dark/light theme following the system (M6)
 - [ ] Background colour pref ("dark background" in Viewnior) + optional checkerboard for transparency (M1/M6)
 - [ ] Remember window size/position(*), maximised state, toolbar visibility, last zoom (M6)

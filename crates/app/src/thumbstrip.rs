@@ -226,7 +226,6 @@ impl ThumbStrip {
     }
 
     /// Drops the cached thumbnail for a file that changed or was deleted.
-    #[allow(dead_code)] // Used by file operations (M5).
     pub fn invalidate(&self, path: &std::path::Path) {
         self.state.loader.invalidate(path);
     }

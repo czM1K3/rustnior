@@ -22,6 +22,7 @@ pub fn setup(win: &Window) {
     setup_keys(win);
     setup_scroll(win);
     setup_clicks(win);
+    setup_context_menu(win);
     setup_drop(win);
 }
 
@@ -152,6 +153,22 @@ fn setup_clicks(win: &Window) {
         }
     });
     win.inner.view.add_controller(click);
+}
+
+fn setup_context_menu(win: &Window) {
+    let view = &win.inner.view;
+    let popover = gtk::PopoverMenu::from_model(Some(&crate::actions::context_menu()));
+    popover.set_parent(view);
+    popover.set_has_arrow(false);
+    popover.set_halign(gtk::Align::Start);
+    let click = gtk::GestureClick::builder()
+        .button(gdk::BUTTON_SECONDARY)
+        .build();
+    click.connect_pressed(move |_, _, x, y| {
+        popover.set_pointing_to(Some(&gdk::Rectangle::new(x as i32, y as i32, 1, 1)));
+        popover.popup();
+    });
+    view.add_controller(click);
 }
 
 fn setup_drop(win: &Window) {

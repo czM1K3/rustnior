@@ -214,6 +214,10 @@ impl Window {
         }
     }
 
+    pub fn slideshow_running(&self) -> bool {
+        self.inner.fs.slideshow.get()
+    }
+
     /// Starts or stops the slideshow. Starting enters fullscreen, like Viewnior.
     pub fn set_slideshow(&self, on: bool) {
         let inner = &self.inner;

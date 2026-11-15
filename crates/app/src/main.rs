@@ -3,6 +3,7 @@
 mod actions;
 mod animation;
 mod dialogs;
+mod fileops;
 mod fullscreen;
 mod imageview;
 mod input;

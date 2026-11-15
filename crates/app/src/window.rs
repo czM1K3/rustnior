@@ -8,7 +8,7 @@ use std::sync::Arc;
 use gtk::{glib, prelude::*};
 use rustnior_core::collection::absolute;
 use rustnior_core::{
-    Collection, DecodedImage, Decoders, LoadEvent, Loader, LoaderConfig, Orientation,
+    Collection, Config, DecodedImage, Decoders, LoadEvent, Loader, LoaderConfig, Orientation,
     Result as DecodeResult, ScanOptions,
 };
 
@@ -54,6 +54,55 @@ pub(crate) struct Inner {
     pub show_statusbar: Cell<bool>,
     pub show_thumbnails: Cell<bool>,
     pub animator: RefCell<Option<Rc<Animator>>>,
+    pub config: RefCell<Config>,
+    pub toast: Toast,
+    /// Set once unsaved changes were resolved and the window may close.
+    pub closing: Cell<bool>,
+}
+
+pub(crate) struct Toast {
+    pub revealer: gtk::Revealer,
+    label: gtk::Label,
+    timer: Rc<RefCell<Option<glib::SourceId>>>,
+}
+
+impl Toast {
+    fn new() -> Self {
+        let label = gtk::Label::builder().wrap(true).build();
+        let frame = gtk::Box::builder().css_classes(["osd", "toolbar"]).build();
+        frame.append(&label);
+        let revealer = gtk::Revealer::builder()
+            .transition_type(gtk::RevealerTransitionType::Crossfade)
+            .halign(gtk::Align::Center)
+            .valign(gtk::Align::End)
+            .margin_bottom(24)
+            .can_target(false)
+            .child(&frame)
+            .build();
+        Self {
+            revealer,
+            label,
+            timer: Rc::new(RefCell::new(None)),
+        }
+    }
+
+    /// Shows `text` briefly over the image.
+    pub fn show(&self, text: &str) {
+        self.label.set_text(text);
+        self.revealer.set_reveal_child(true);
+        if let Some(id) = self.timer.take() {
+            id.remove();
+        }
+        let revealer = self.revealer.downgrade();
+        let timer = Rc::clone(&self.timer);
+        let id = glib::timeout_add_local_once(std::time::Duration::from_secs(3), move || {
+            timer.replace(None);
+            if let Some(r) = revealer.upgrade() {
+                r.set_reveal_child(false);
+            }
+        });
+        self.timer.replace(Some(id));
+    }
 }
 
 pub(crate) struct StatusBar {
@@ -142,6 +191,8 @@ impl Window {
         window.set_titlebar(Some(&header));
         let fs = crate::fullscreen::FsUi::new();
         overlay.add_overlay(&fs.revealer);
+        let toast = Toast::new();
+        overlay.add_overlay(&toast.revealer);
 
         // Loader events arrive on worker threads; forward them to the main loop.
         let (tx, rx) = async_channel::unbounded::<LoadEvent>();
@@ -171,6 +222,9 @@ impl Window {
                 show_statusbar: Cell::new(true),
                 show_thumbnails: Cell::new(false),
                 animator: RefCell::new(None),
+                config: RefCell::new(Config::default()),
+                toast,
+                closing: Cell::new(false),
             }),
         };
 
@@ -186,6 +240,13 @@ impl Window {
         // reference and is dropped when the window is destroyed.
         let keep_alive = this.clone();
         this.inner.window.connect_close_request(move |_| {
+            if keep_alive.has_unsaved_changes() && !keep_alive.inner.closing.get() {
+                keep_alive.leave_current(|w| {
+                    w.inner.closing.set(true);
+                    w.inner.window.close();
+                });
+                return glib::Propagation::Stop;
+            }
             keep_alive.on_close();
             glib::Propagation::Proceed
         });
@@ -196,10 +257,7 @@ impl Window {
         let weak = Rc::downgrade(&this.inner);
         this.inner.strip.connect_activate(move |i| {
             let Some(inner) = weak.upgrade() else { return };
-            let w = Window { inner };
-            if w.inner.collection.borrow_mut().select(i).is_some() {
-                w.show_current();
-            }
+            Window { inner }.go(move |c| c.select(i).is_some());
         });
         this.inner.view.connect_view_changed(glib::clone!(
             #[weak(rename_to = inner)]
@@ -227,8 +285,8 @@ impl Window {
         &self.inner.window
     }
 
-    /// Opens files and/or folders. `early` is a decode of `paths[0]` that was
-    /// started before the window existed.
+    /// Opens files and/or folders, after dealing with unsaved changes.
+    /// `early` is a decode of `paths[0]` started before the window existed.
     pub fn open_paths(
         &self,
         paths: Vec<PathBuf>,
@@ -237,6 +295,14 @@ impl Window {
         if paths.is_empty() {
             return;
         }
+        self.leave_current(move |w| w.open_paths_now(paths, early));
+    }
+
+    fn open_paths_now(
+        &self,
+        paths: Vec<PathBuf>,
+        early: Option<async_channel::Receiver<EarlyLoad>>,
+    ) {
         let generation = self.inner.scan_generation.get() + 1;
         self.inner.scan_generation.set(generation);
 
@@ -310,28 +376,28 @@ impl Window {
             .map(|e| e.path.clone())
     }
 
+    /// Moves the cursor with `f` (after dealing with unsaved changes) and
+    /// shows the result.
+    pub fn go(&self, f: impl FnOnce(&mut Collection) -> bool + 'static) {
+        self.leave_current(move |w| {
+            if f(&mut w.inner.collection.borrow_mut()) {
+                w.show_current();
+            }
+        });
+    }
+
     /// Moves `delta` images forward/backward (wrapping).
     pub fn navigate(&self, delta: isize) {
-        tracing::debug!(
-            delta,
-            len = self.inner.collection.borrow().len(),
-            "navigate"
-        );
-        if self.inner.collection.borrow_mut().step(delta).is_some() {
-            self.show_current();
-        }
+        tracing::debug!(delta, "navigate");
+        self.go(move |c| c.step(delta).is_some());
     }
 
     pub fn first(&self) {
-        if self.inner.collection.borrow_mut().first().is_some() {
-            self.show_current();
-        }
+        self.go(|c| c.first().is_some());
     }
 
     pub fn last(&self) {
-        if self.inner.collection.borrow_mut().last().is_some() {
-            self.show_current();
-        }
+        self.go(|c| c.last().is_some());
     }
 
     /// Displays the current collection entry (from cache if possible) and

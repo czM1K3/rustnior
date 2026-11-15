@@ -21,6 +21,12 @@ const ACCELS: &[(&str, &[&str])] = &[
     ("win.animation-toggle", &["p"]),
     ("win.animation-step", &["j"]),
     ("win.properties", &["<Alt>Return", "<Alt>KP_Enter"]),
+    ("win.save", &["<Control>s"]),
+    ("win.save-as", &["<Control><Shift>s"]),
+    ("win.delete", &["Delete", "KP_Delete"]),
+    ("win.copy", &["<Control>c"]),
+    ("win.copy-path", &["<Control><Shift>c"]),
+    ("win.wallpaper", &["<Control>F8"]),
     (
         "win.next",
         &["space", "Page_Down", "<Alt>Right", "KP_Page_Down"],
@@ -91,6 +97,15 @@ pub fn setup(win: &Window, app: &gtk::Application) {
         }),
     );
     add("properties", Box::new(crate::properties::show));
+    add("save", Box::new(Window::save));
+    add("save-as", Box::new(Window::save_as));
+    add("delete", Box::new(Window::delete));
+    add("copy", Box::new(Window::copy_image));
+    add("copy-path", Box::new(Window::copy_path));
+    add("wallpaper", Box::new(Window::set_wallpaper));
+    add("open-with", Box::new(Window::open_with));
+    add("open-location", Box::new(Window::open_containing_folder));
+    add("reload", Box::new(Window::reload));
     add(
         "rotate-cw",
         Box::new(|w| w.transform(Orientation::rotate_cw)),
@@ -231,7 +246,18 @@ pub fn build_header(zoom_label: &gtk::Label) -> gtk::HeaderBar {
     let files = gio::Menu::new();
     files.append(Some("Open Image…"), Some("win.open"));
     files.append(Some("Open Folder…"), Some("win.open-folder"));
+    files.append(Some("Open With…"), Some("win.open-with"));
+    files.append(Some("Open Containing Folder"), Some("win.open-location"));
     menu.append_section(None, &files);
+    let edit = gio::Menu::new();
+    edit.append(Some("Save"), Some("win.save"));
+    edit.append(Some("Save As…"), Some("win.save-as"));
+    edit.append(Some("Reload"), Some("win.reload"));
+    edit.append(Some("Copy Image"), Some("win.copy"));
+    edit.append(Some("Copy Path"), Some("win.copy-path"));
+    edit.append(Some("Set as Wallpaper"), Some("win.wallpaper"));
+    edit.append(Some("Move to Trash"), Some("win.delete"));
+    menu.append_section(None, &edit);
     let sort = gio::Menu::new();
     sort.append(Some("By Name"), Some("win.sort-by::name"));
     sort.append(Some("By Date Modified"), Some("win.sort-by::modified"));
@@ -284,4 +310,34 @@ pub fn build_header(zoom_label: &gtk::Label) -> gtk::HeaderBar {
     header.pack_end(zoom_label);
     header.pack_end(&zoom);
     header
+}
+
+/// Right-click menu for the image.
+pub fn context_menu() -> gio::Menu {
+    let menu = gio::Menu::new();
+    let open = gio::Menu::new();
+    open.append(Some("Open With…"), Some("win.open-with"));
+    open.append(Some("Open Containing Folder"), Some("win.open-location"));
+    menu.append_section(None, &open);
+    let copy = gio::Menu::new();
+    copy.append(Some("Copy Image"), Some("win.copy"));
+    copy.append(Some("Copy Path"), Some("win.copy-path"));
+    copy.append(Some("Set as Wallpaper"), Some("win.wallpaper"));
+    menu.append_section(None, &copy);
+    let image = gio::Menu::new();
+    image.append(Some("Rotate Clockwise"), Some("win.rotate-cw"));
+    image.append(Some("Rotate Anticlockwise"), Some("win.rotate-ccw"));
+    image.append(Some("Flip Horizontally"), Some("win.flip-horizontal"));
+    image.append(Some("Flip Vertically"), Some("win.flip-vertical"));
+    menu.append_section(None, &image);
+    let file = gio::Menu::new();
+    file.append(Some("Save"), Some("win.save"));
+    file.append(Some("Save As…"), Some("win.save-as"));
+    file.append(Some("Move to Trash"), Some("win.delete"));
+    menu.append_section(None, &file);
+    let props = gio::Menu::new();
+    props.append(Some("Fullscreen"), Some("win.fullscreen"));
+    props.append(Some("Properties"), Some("win.properties"));
+    menu.append_section(None, &props);
+    menu
 }
