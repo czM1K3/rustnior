@@ -62,7 +62,14 @@ sudo make install PREFIX=/usr/local
 ```
 
 This installs the binary, the `.desktop` file, the AppStream metainfo and the
-icons. A Flatpak manifest is in `build-aux/` (generate `cargo-sources.json` with
+icons.
+
+On Arch Linux, use the PKGBUILDs in `packaging/arch/`: `rustnior` builds a tagged
+release, `rustnior-git` the latest commit.
+
+```sh
+cd packaging/arch/rustnior-git && makepkg -si
+``` A Flatpak manifest is in `build-aux/` (generate `cargo-sources.json` with
 `make flatpak-sources` first).
 
 ## Usage

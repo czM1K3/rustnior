@@ -1,0 +1,26 @@
+pkgbase = rustnior
+	pkgdesc = Fast and minimal image viewer (Viewnior-like, GTK4)
+	pkgver = 0.1.0
+	pkgrel = 1
+	url = https://github.com/czM1K3/rustnior
+	arch = x86_64
+	arch = aarch64
+	license = GPL-3.0-or-later
+	makedepends = cargo
+	depends = gcc-libs
+	depends = glib2
+	depends = glibc
+	depends = graphene
+	depends = gtk4
+	depends = hicolor-icon-theme
+	depends = libheif
+	depends = libjpeg-turbo
+	depends = pango
+	optdepends = xdg-desktop-portal: set wallpaper and follow the dark/light preference on any desktop
+	optdepends = feh: set wallpaper on plain X11 window managers
+	optdepends = nitrogen: set wallpaper on plain X11 window managers
+	options = !lto
+	source = rustnior-0.1.0.tar.gz::https://github.com/czM1K3/rustnior/archive/v0.1.0.tar.gz
+	sha256sums = SKIP
+
+pkgname = rustnior

@@ -1,0 +1,64 @@
+# Maintainer: czM1K3
+pkgname=rustnior-git
+_pkgname=rustnior
+pkgver=0.1.0.r0.g0000000
+pkgrel=1
+pkgdesc='Fast and minimal image viewer (Viewnior-like, GTK4) - development version'
+arch=('x86_64' 'aarch64')
+url='https://github.com/czM1K3/rustnior'
+license=('GPL-3.0-or-later')
+depends=(
+  'gcc-libs'
+  'glib2'
+  'glibc'
+  'graphene'
+  'gtk4'
+  'hicolor-icon-theme'
+  'libheif'
+  'libjpeg-turbo'
+  'pango'
+)
+makedepends=('cargo' 'git')
+optdepends=(
+  'xdg-desktop-portal: set wallpaper and follow the dark/light preference on any desktop'
+  'feh: set wallpaper on plain X11 window managers'
+  'nitrogen: set wallpaper on plain X11 window managers'
+)
+provides=("$_pkgname")
+conflicts=("$_pkgname")
+options=('!lto')
+source=("$_pkgname::git+$url.git")
+sha256sums=('SKIP')
+
+pkgver() {
+  cd "$_pkgname"
+  local version
+  version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n1)
+  printf '%s.r%s.g%s' "$version" "$(git rev-list --count HEAD)" "$(git rev-parse --short=7 HEAD)"
+}
+
+prepare() {
+  cd "$_pkgname"
+  export RUSTUP_TOOLCHAIN=stable
+  cargo fetch --locked --target "$(rustc --print host-tuple)"
+}
+
+build() {
+  cd "$_pkgname"
+  export RUSTUP_TOOLCHAIN=stable
+  export CARGO_TARGET_DIR=target
+  cargo build --frozen --release
+}
+
+check() {
+  cd "$_pkgname"
+  export RUSTUP_TOOLCHAIN=stable
+  export CARGO_TARGET_DIR=target
+  cargo test --frozen --release --all-features
+}
+
+package() {
+  cd "$_pkgname"
+  make install DESTDIR="$pkgdir" PREFIX=/usr CARGO_TARGET=target/release
+  install -Dm644 README.md -t "$pkgdir/usr/share/doc/$_pkgname"
+}

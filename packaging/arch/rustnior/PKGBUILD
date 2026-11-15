@@ -1,0 +1,55 @@
+# Maintainer: czM1K3
+pkgname=rustnior
+pkgver=0.1.0
+pkgrel=1
+pkgdesc='Fast and minimal image viewer (Viewnior-like, GTK4)'
+arch=('x86_64' 'aarch64')
+url='https://github.com/czM1K3/rustnior'
+license=('GPL-3.0-or-later')
+depends=(
+  'gcc-libs'
+  'glib2'
+  'glibc'
+  'graphene'
+  'gtk4'
+  'hicolor-icon-theme'
+  'libheif'
+  'libjpeg-turbo'
+  'pango'
+)
+makedepends=('cargo')
+optdepends=(
+  'xdg-desktop-portal: set wallpaper and follow the dark/light preference on any desktop'
+  'feh: set wallpaper on plain X11 window managers'
+  'nitrogen: set wallpaper on plain X11 window managers'
+)
+options=('!lto')
+source=("$pkgname-$pkgver.tar.gz::$url/archive/v$pkgver.tar.gz")
+# Run `updpkgsums` once the v$pkgver tag is published.
+sha256sums=('SKIP')
+
+prepare() {
+  cd "$pkgname-$pkgver"
+  export RUSTUP_TOOLCHAIN=stable
+  cargo fetch --locked --target "$(rustc --print host-tuple)"
+}
+
+build() {
+  cd "$pkgname-$pkgver"
+  export RUSTUP_TOOLCHAIN=stable
+  export CARGO_TARGET_DIR=target
+  cargo build --frozen --release
+}
+
+check() {
+  cd "$pkgname-$pkgver"
+  export RUSTUP_TOOLCHAIN=stable
+  export CARGO_TARGET_DIR=target
+  cargo test --frozen --release --all-features
+}
+
+package() {
+  cd "$pkgname-$pkgver"
+  make install DESTDIR="$pkgdir" PREFIX=/usr CARGO_TARGET=target/release
+  install -Dm644 README.md -t "$pkgdir/usr/share/doc/$pkgname"
+}
