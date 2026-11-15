@@ -1,6 +1,9 @@
 //! rustnior — a fast, minimal image viewer.
 
+mod actions;
+mod dialogs;
 mod imageview;
+mod input;
 mod texture;
 mod window;
 
@@ -12,7 +15,7 @@ use clap::Parser;
 use gtk::{gio, glib, prelude::*};
 use rustnior_core::{DecodeRequest, Decoders};
 
-use crate::window::{LoadResult, Window};
+use crate::window::{EarlyLoad, Window};
 
 pub const APP_ID: &str = "io.github.rustnior.Rustnior";
 
@@ -42,7 +45,7 @@ fn main() -> ExitCode {
 
     // Start decoding the first image before GTK initialises so the two overlap.
     let early = cli.paths.first().filter(|p| p.is_file()).map(|path| {
-        let (tx, rx) = async_channel::bounded::<LoadResult>(1);
+        let (tx, rx) = async_channel::bounded::<EarlyLoad>(1);
         let path = path.clone();
         let decoders = Arc::clone(&decoders);
         std::thread::spawn(move || {
@@ -61,12 +64,10 @@ fn main() -> ExitCode {
     let early = std::cell::RefCell::new(early);
     app.connect_activate(move |app| {
         let win = Window::new(app, Arc::clone(&decoders));
-        if let Some(rx) = early.borrow_mut().take() {
-            win.receive_early(rx);
-        } else if let Some(path) = cli.paths.first() {
-            win.open(path.clone());
-        }
         win.present();
+        win.open_paths(cli.paths.clone(), early.borrow_mut().take());
+        #[cfg(debug_assertions)]
+        smoke::run_script(&win);
     });
 
     // GTK must not parse our arguments; clap already did.
@@ -75,5 +76,42 @@ fn main() -> ExitCode {
         ExitCode::SUCCESS
     } else {
         ExitCode::FAILURE
+    }
+}
+
+/// Debug builds only: `RUSTNIOR_SMOKE="next,zoom-in,…"` activates window
+/// actions one by one (every `RUSTNIOR_SMOKE_MS`, default 400 ms) so the UI
+/// can be exercised headlessly.
+#[cfg(debug_assertions)]
+mod smoke {
+    use gtk::{glib, prelude::*};
+
+    pub fn run_script(win: &crate::window::Window) {
+        let Ok(script) = std::env::var("RUSTNIOR_SMOKE") else {
+            return;
+        };
+        let ms = std::env::var("RUSTNIOR_SMOKE_MS")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(400);
+        let mut steps: std::collections::VecDeque<String> =
+            script.split(',').map(|s| s.trim().to_owned()).collect();
+        let window = win.window().clone();
+        glib::timeout_add_local(std::time::Duration::from_millis(ms), move || {
+            let Some(step) = steps.pop_front() else {
+                return glib::ControlFlow::Break;
+            };
+            let (name, arg) = match step.split_once("::") {
+                Some((n, a)) => (n.to_owned(), Some(a.to_variant())),
+                None => (step.clone(), None),
+            };
+            tracing::info!(%step, "smoke step");
+            if let Err(err) =
+                WidgetExt::activate_action(&window, &format!("win.{name}"), arg.as_ref())
+            {
+                tracing::error!(%step, %err, "smoke step failed");
+            }
+            glib::ControlFlow::Continue
+        });
     }
 }

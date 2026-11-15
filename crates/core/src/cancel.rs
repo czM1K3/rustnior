@@ -20,6 +20,11 @@ impl CancelToken {
         self.0.load(Ordering::Relaxed)
     }
 
+    /// True if both handles refer to the same flag.
+    pub fn same_as(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.0, &other.0)
+    }
+
     /// Returns `Err(Cancelled)` if cancellation was requested.
     pub fn check(&self) -> Result<()> {
         if self.is_cancelled() {

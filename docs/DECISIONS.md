@@ -17,3 +17,12 @@ Defaults chosen without asking, per the working process in CLAUDE.md.
   applied at draw time, never by touching pixels, until the user saves.
 - **Decoders**: pure Rust by default (`image` w/ zune-jpeg, png, gif, webp; resvg),
   native libraries behind features (`heif`, `avif`, `jxl`, `turbojpeg`).
+- **Status bar**: shown by default (Viewnior hides it); toggle in the menu.
+- **Wheel / double-click defaults**: as Viewnior — wheel zooms, Shift/horizontal wheel
+  navigates, Ctrl+wheel always zooms; double-click toggles best fit ↔ 100%.
+  Touchpads pan with two fingers and zoom with Ctrl or pinch.
+- **Preloading**: ±2 images around the current one, forward first; 768 MiB decoded-image
+  cache (configurable in M6). 2–4 decode threads.
+- **Folder scanning** runs on a worker thread; a single opened file is shown before
+  its folder has been listed.
+- **No folder recursion**, matching Viewnior.
