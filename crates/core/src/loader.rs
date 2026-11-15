@@ -11,7 +11,7 @@ use std::sync::{Arc, Condvar, Mutex, MutexGuard};
 
 use crate::cache::{ByteLru, Weighted};
 use crate::cancel::CancelToken;
-use crate::decode::{DecodeRequest, Decoders};
+use crate::decode::{DecodeRequest, Decoders, PreviewSink};
 use crate::error::DecodeError;
 use crate::pixels::DecodedImage;
 
@@ -19,6 +19,12 @@ pub const DEFAULT_CACHE_BYTES: usize = 768 * 1024 * 1024;
 
 #[derive(Debug)]
 pub enum LoadEvent<V = DecodedImage> {
+    /// A quick reduced decode of the highest-priority image; the full one
+    /// follows as `Loaded`. Not cached.
+    Preview {
+        path: PathBuf,
+        image: Arc<DecodedImage>,
+    },
     Loaded {
         path: PathBuf,
         image: Arc<V>,
@@ -32,7 +38,9 @@ pub enum LoadEvent<V = DecodedImage> {
 impl<V> LoadEvent<V> {
     pub fn path(&self) -> &Path {
         match self {
-            Self::Loaded { path, .. } | Self::Failed { path, .. } => path,
+            Self::Preview { path, .. } | Self::Loaded { path, .. } | Self::Failed { path, .. } => {
+                path
+            }
         }
     }
 }
@@ -41,6 +49,8 @@ impl<V> LoadEvent<V> {
 pub struct LoaderConfig {
     pub threads: usize,
     pub cache_bytes: usize,
+    /// Ask decoders for a quick preview of the highest-priority image.
+    pub previews: bool,
 }
 
 impl Default for LoaderConfig {
@@ -49,6 +59,7 @@ impl Default for LoaderConfig {
         Self {
             threads: cores.clamp(2, 4),
             cache_bytes: DEFAULT_CACHE_BYTES,
+            previews: false,
         }
     }
 }
@@ -70,6 +81,7 @@ struct State<V> {
     seq: u64,
     target_size: Option<(u32, u32)>,
     shutdown: bool,
+    previews: bool,
 }
 
 struct Shared<V> {
@@ -124,6 +136,7 @@ impl<V: Weighted + Send + Sync + 'static> Loader<V> {
                 seq: 0,
                 target_size: None,
                 shutdown: false,
+                previews: config.previews,
             }),
             work: Condvar::new(),
             job: Box::new(job),
@@ -133,7 +146,7 @@ impl<V: Weighted + Send + Sync + 'static> Loader<V> {
             let shared = Arc::clone(&shared);
             let spawned = std::thread::Builder::new()
                 .name(format!("decode-{i}"))
-                .spawn(move || worker(&shared));
+                .spawn(move || worker(shared));
             if let Err(err) = spawned {
                 tracing::error!(%err, "failed to spawn decode thread");
             }
@@ -238,9 +251,9 @@ impl<V: Weighted + Send + Sync + 'static> Drop for Loader<V> {
     }
 }
 
-fn worker<V: Weighted>(shared: &Shared<V>) {
+fn worker<V: Weighted + Send + Sync + 'static>(shared: Arc<Shared<V>>) {
     loop {
-        let (job, target_size) = {
+        let (job, target_size, previews) = {
             let mut st = shared.lock();
             loop {
                 if st.shutdown {
@@ -255,7 +268,7 @@ fn worker<V: Weighted>(shared: &Shared<V>) {
                 if let Some(i) = best {
                     let job = st.queue.swap_remove(i);
                     st.inflight.insert(job.path.clone(), job.cancel.clone());
-                    break (job, st.target_size);
+                    break (job, st.target_size, st.previews);
                 }
                 st = shared
                     .work
@@ -264,9 +277,23 @@ fn worker<V: Weighted>(shared: &Shared<V>) {
             }
         };
 
+        // Only the image the user is looking at gets a preview.
+        let preview = (previews && job.priority == 0).then(|| {
+            let (shared, path, cancel) =
+                (Arc::clone(&shared), job.path.clone(), job.cancel.clone());
+            PreviewSink(Arc::new(move |image| {
+                if !cancel.is_cancelled() {
+                    (shared.sink)(LoadEvent::Preview {
+                        path: path.clone(),
+                        image: Arc::new(image),
+                    });
+                }
+            }))
+        });
         let req = DecodeRequest {
             cancel: job.cancel.clone(),
             target_size,
+            preview,
             ..DecodeRequest::default()
         };
         let span = tracing::debug_span!("decode", path = %job.path.display());
@@ -358,6 +385,7 @@ mod tests {
             LoaderConfig {
                 threads: 1,
                 cache_bytes: 1 << 20,
+                previews: false,
             },
             move |e| {
                 let _ = tx.lock().map(|t| t.send(e));

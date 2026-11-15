@@ -9,6 +9,8 @@ use gtk::{gdk, glib, graphene, gsk, prelude::*, subclass::prelude::*};
 use rustnior_core::viewport::ZoomMode;
 use rustnior_core::{Orientation, Viewport};
 
+use crate::texture::{Full, Picture, TILE, Tiles};
+
 /// Duration of smooth zoom animations, in microseconds.
 const ZOOM_ANIM_US: f64 = 160_000.0;
 /// Keyboard panning step, in logical pixels.
@@ -30,8 +32,7 @@ mod imp {
 
     #[derive(Default)]
     pub struct ImageView {
-        pub texture: RefCell<Option<gdk::Texture>>,
-        pub has_alpha: Cell<bool>,
+        pub picture: RefCell<Option<Picture>>,
         pub orientation: Cell<Orientation>,
         pub viewport: RefCell<Viewport>,
         pub anim: RefCell<Option<ZoomAnim>>,
@@ -141,36 +142,38 @@ impl ImageView {
         })
     }
 
-    /// Shows a new texture with the given display orientation. `reset_zoom`
-    /// re-applies fit mode; otherwise the current zoom mode is kept (useful
-    /// when refining a preview or swapping animation frames).
-    pub fn set_texture(
+    /// Shows a new picture with the given display orientation. `reset_zoom`
+    /// re-applies fit mode; otherwise zoom and pan are kept (used when a
+    /// preview is refined by the full image).
+    pub fn set_picture(
         &self,
-        texture: Option<gdk::Texture>,
+        picture: Option<Picture>,
         orientation: Orientation,
         reset_zoom: bool,
     ) {
         let imp = self.imp();
         self.stop_animation();
         imp.orientation.set(orientation);
-        if let Some(t) = &texture {
-            imp.has_alpha.set(texture_has_alpha(t));
+        if let Some(p) = &picture {
             let mut vp = imp.viewport.borrow_mut();
             if reset_zoom {
                 vp.fit();
             }
-            let (w, h) = orientation.apply_size(t.width() as u32, t.height() as u32);
+            let (w, h) = orientation.apply_size(p.width, p.height);
             if reset_zoom || vp.image_size() != (f64::from(w), f64::from(h)) {
                 vp.set_image_size(w, h);
             }
         }
-        imp.texture.replace(texture);
+        imp.picture.replace(picture);
         self.changed();
     }
 
     /// Replaces the pixels without touching zoom or pan (animation frames).
     pub fn replace_texture(&self, texture: gdk::Texture) {
-        self.imp().texture.replace(Some(texture));
+        if let Some(p) = self.imp().picture.borrow_mut().as_mut() {
+            p.full = Full::Texture(texture);
+            p.reduced = None;
+        }
         self.queue_draw();
     }
 
@@ -182,15 +185,15 @@ impl ImageView {
     pub fn set_orientation(&self, orientation: Orientation) {
         let imp = self.imp();
         imp.orientation.set(orientation);
-        if let Some(t) = imp.texture.borrow().as_ref() {
-            let (w, h) = orientation.apply_size(t.width() as u32, t.height() as u32);
+        if let Some(p) = imp.picture.borrow().as_ref() {
+            let (w, h) = orientation.apply_size(p.width, p.height);
             imp.viewport.borrow_mut().set_image_size(w, h);
         }
         self.changed();
     }
 
-    pub fn texture(&self) -> Option<gdk::Texture> {
-        self.imp().texture.borrow().clone()
+    pub fn has_image(&self) -> bool {
+        self.imp().picture.borrow().is_some()
     }
 
     pub fn zoom(&self) -> f64 {
@@ -421,7 +424,8 @@ impl ImageView {
         if let Some(bg) = imp.background.get() {
             snapshot.append_color(&bg, &graphene::Rect::new(0.0, 0.0, w, h));
         }
-        let Some(texture) = imp.texture.borrow().clone() else {
+        let picture = imp.picture.borrow();
+        let Some(pic) = picture.as_ref() else {
             return;
         };
 
@@ -436,28 +440,17 @@ impl ImageView {
             vp.clone()
         };
         let r = vp.image_rect();
-        let zoom = vp.zoom();
         // Align to device pixels so 100% is pixel-exact.
         let snap = |v: f64| ((v * dpr).round() / dpr) as f32;
         let rect = graphene::Rect::new(snap(r.x), snap(r.y), snap(r.w), snap(r.h));
 
-        if imp.has_alpha.get() && imp.checkerboard.get() {
+        if pic.has_alpha && imp.checkerboard.get() {
             append_checkerboard(snapshot, &rect);
         }
-        let filter = if (zoom - 1.0).abs() < 1e-6 || !imp.smooth.get() {
-            gsk::ScalingFilter::Nearest
-        } else if zoom < 1.0 {
-            gsk::ScalingFilter::Trilinear
-        } else {
-            gsk::ScalingFilter::Linear
-        };
+
+        // Draw in the image's own (unrotated) space, centred on the origin;
+        // GSK mirrors/rotates it and moves it into place.
         let o = imp.orientation.get();
-        if o.is_identity() {
-            snapshot.append_scaled_texture(&texture, filter, &rect);
-            return;
-        }
-        // Draw the unrotated texture centred on the origin, mirrored and
-        // rotated by GSK, then moved into place.
         let (tw, th) = if o.swaps_dimensions() {
             (rect.height(), rect.width())
         } else {
@@ -468,24 +461,122 @@ impl ImageView {
             rect.x() + rect.width() / 2.0,
             rect.y() + rect.height() / 2.0,
         ));
-        snapshot.rotate(o.rotation_degrees() as f32);
-        if o.is_flipped() {
-            snapshot.scale(-1.0, 1.0);
+        if !o.is_identity() {
+            snapshot.rotate(o.rotation_degrees() as f32);
+            if o.is_flipped() {
+                snapshot.scale(-1.0, 1.0);
+            }
         }
-        snapshot.append_scaled_texture(
-            &texture,
-            filter,
-            &graphene::Rect::new(-tw / 2.0, -th / 2.0, tw, th),
-        );
+        let area = graphene::Rect::new(-tw / 2.0, -th / 2.0, tw, th);
+        // Device pixels covered by one source pixel.
+        let zoom = vp.zoom();
+        let smooth = imp.smooth.get();
+        let filter_for = |texture_width: u32| {
+            let scale = f64::from(tw) * dpr / f64::from(texture_width.max(1));
+            if (scale - 1.0).abs() < 1e-3 || !smooth {
+                gsk::ScalingFilter::Nearest
+            } else if scale < 1.0 {
+                gsk::ScalingFilter::Trilinear
+            } else {
+                gsk::ScalingFilter::Linear
+            }
+        };
+
+        // The reduced copy suffices while it has at least one texel per
+        // device pixel on screen.
+        let needed = zoom * f64::from(pic.width);
+        match (&pic.reduced, &pic.full) {
+            (Some(red), _) if f64::from(red.width()) + 0.5 >= needed => {
+                snapshot.append_scaled_texture(red, filter_for(red.width() as u32), &area);
+            }
+            (_, Full::Texture(t)) => {
+                snapshot.append_scaled_texture(t, filter_for(t.width() as u32), &area);
+            }
+            (_, Full::Tiled(tiles)) => {
+                let visible = self.visible_source_rect(&vp, pic, o);
+                draw_tiles(
+                    snapshot,
+                    tiles,
+                    &area,
+                    pic,
+                    visible,
+                    filter_for(pic.full_width()),
+                );
+            }
+        }
         snapshot.restore();
+    }
+
+    /// The part of the image on screen, in unrotated source pixels.
+    fn visible_source_rect(&self, vp: &Viewport, pic: &Picture, o: Orientation) -> [f64; 4] {
+        let (vw, vh) = vp.view_size();
+        let (ow, oh) = vp.image_size();
+        let (ax, ay) = vp.view_to_image(0.0, 0.0);
+        let (bx, by) = vp.view_to_image(vw, vh);
+        let inv = o.inverse();
+        let p = inv.map_point_f(ax.clamp(0.0, ow), ay.clamp(0.0, oh), ow, oh);
+        let q = inv.map_point_f(bx.clamp(0.0, ow), by.clamp(0.0, oh), ow, oh);
+        // The view uses source dimensions; tiles use the full frame's.
+        let k = f64::from(pic.full_width()) / f64::from(pic.width);
+        [
+            p.0.min(q.0) * k,
+            p.1.min(q.1) * k,
+            p.0.max(q.0) * k,
+            p.1.max(q.1) * k,
+        ]
     }
 }
 
-fn texture_has_alpha(t: &gdk::Texture) -> bool {
-    !matches!(
-        t.format(),
-        gdk::MemoryFormat::G8 | gdk::MemoryFormat::R8g8b8 | gdk::MemoryFormat::B8g8r8
-    )
+/// Draws the tiles intersecting `visible` (source pixels) into `area`.
+fn draw_tiles(
+    snapshot: &gtk::Snapshot,
+    tiles: &Tiles,
+    area: &graphene::Rect,
+    pic: &Picture,
+    visible: [f64; 4],
+    filter: gsk::ScalingFilter,
+) {
+    let full_w = f64::from(pic.full_width());
+    let s = f64::from(area.width()) / full_w;
+    let t = f64::from(TILE);
+    let cols = (visible[0] / t).floor() as u32
+        ..=((visible[2] / t).ceil() as u32)
+            .min(tiles.columns())
+            .saturating_sub(1)
+            .max((visible[0] / t).floor() as u32);
+    let rows = (visible[1] / t).floor() as u32
+        ..=((visible[3] / t).ceil() as u32)
+            .min(tiles.rows())
+            .saturating_sub(1)
+            .max((visible[1] / t).floor() as u32);
+    let mut drawn = Vec::new();
+    for row in rows {
+        for col in cols.clone() {
+            if col >= tiles.columns() || row >= tiles.rows() {
+                continue;
+            }
+            let (tex, [x, y, w, h]) = tiles.tile(col, row);
+            let at = |px: u32| px as f32 * s as f32;
+            // Clip to the tile's own cell; the 1px border only feeds filtering.
+            let cell_x1 = ((col + 1) * TILE).min(tiles.columns() * TILE);
+            let cell_y1 = ((row + 1) * TILE).min(tiles.rows() * TILE);
+            let clip = graphene::Rect::new(
+                area.x() + at(col * TILE),
+                area.y() + at(row * TILE),
+                at(cell_x1 - col * TILE),
+                at(cell_y1 - row * TILE),
+            );
+            snapshot.push_clip(&clip);
+            snapshot.append_scaled_texture(
+                &tex,
+                filter,
+                &graphene::Rect::new(area.x() + at(x), area.y() + at(y), at(w), at(h)),
+            );
+            snapshot.pop();
+            drawn.push((col, row));
+        }
+    }
+    tiles.retain(&drawn);
 }
 
 fn append_checkerboard(snapshot: &gtk::Snapshot, bounds: &graphene::Rect) {

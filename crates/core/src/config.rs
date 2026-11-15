@@ -95,6 +95,10 @@ pub struct WindowState {
     pub width: i32,
     pub height: i32,
     pub maximized: bool,
+    /// Size of the monitor last used, in device pixels. Lets the very first
+    /// decode (started before the window exists) size its preview.
+    pub monitor_width: u32,
+    pub monitor_height: u32,
 }
 
 impl Default for WindowState {
@@ -103,6 +107,8 @@ impl Default for WindowState {
             width: 1000,
             height: 700,
             maximized: false,
+            monitor_width: 1920,
+            monitor_height: 1080,
         }
     }
 }
@@ -246,6 +252,8 @@ impl Config {
         self.preload = self.preload.min(8);
         self.window.width = self.window.width.clamp(200, 16384);
         self.window.height = self.window.height.clamp(150, 16384);
+        self.window.monitor_width = self.window.monitor_width.clamp(320, 32768);
+        self.window.monitor_height = self.window.monitor_height.clamp(240, 32768);
         if !is_hex_color(&self.background) {
             self.background.clear();
         }

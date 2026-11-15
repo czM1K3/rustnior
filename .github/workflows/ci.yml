@@ -12,17 +12,28 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - name: Install GTK
-        run: sudo apt-get update && sudo apt-get install -y libgtk-4-dev
+      - name: Install system libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-4-dev libturbojpeg0-dev libheif-dev \
+            desktop-file-utils appstream
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
       - uses: Swatinem/rust-cache@v2
       - name: fmt
         run: cargo fmt --all -- --check
-      - name: clippy
-        run: cargo clippy --all-targets -- -D warnings
+      - name: clippy (all features)
+        run: cargo clippy --all-targets --all-features -- -D warnings
+      - name: clippy (pure Rust)
+        run: cargo clippy --all-targets --no-default-features -- -D warnings
       - name: build
-        run: cargo build --all-targets
+        run: cargo build --all-targets --all-features
       - name: test
-        run: cargo test
+        run: cargo test --all-features
+      - name: benchmarks compile
+        run: cargo bench --no-run -p rustnior-core --all-features
+      - name: validate desktop file and metainfo
+        run: |
+          desktop-file-validate data/io.github.rustnior.Rustnior.desktop
+          appstreamcli validate --no-net data/io.github.rustnior.Rustnior.metainfo.xml

@@ -85,3 +85,46 @@ fn decodes_animations() {
         }
     }
 }
+
+#[cfg(feature = "jxl")]
+#[test]
+fn decodes_jpeg_xl() {
+    let img = decode("still.jxl").expect("jxl");
+    assert_eq!((img.source_width, img.source_height), (40, 30));
+    assert_eq!(img.format_name, "JPEG XL");
+}
+
+#[cfg(feature = "heif")]
+#[test]
+fn decodes_heif_family() {
+    for (name, format) in [("still.avif", "AVIF"), ("still.heic", "HEIF")] {
+        let img = decode(name).unwrap_or_else(|e| panic!("{name}: {e}"));
+        assert_eq!((img.source_width, img.source_height), (40, 30), "{name}");
+        assert_eq!(img.format_name, format);
+    }
+}
+
+#[cfg(feature = "turbojpeg")]
+#[test]
+fn turbojpeg_preview_is_reduced_and_full_matches() {
+    use std::sync::{Arc, Mutex};
+    // 64×48 is too small for a worthwhile preview against a 16×12 target…
+    let got = Arc::new(Mutex::new(Vec::new()));
+    let sink = Arc::clone(&got);
+    let req = DecodeRequest {
+        target_size: Some((8, 6)),
+        preview: Some(rustnior_core::decode::PreviewSink(Arc::new(move |img| {
+            if let Ok(mut v) = sink.lock() {
+                v.push((img.frames[0].width, img.is_preview, img.source_width));
+            }
+        }))),
+        ..DecodeRequest::default()
+    };
+    let full = Decoders::default()
+        .decode_path(&fixture("rgb.jpg"), &req)
+        .expect("decode");
+    assert_eq!((full.frames[0].width, full.is_preview), (64, false));
+    // …but against an 8×6 target a 1/8-scale preview (8 px wide) arrives first.
+    let previews = got.lock().map(|v| v.clone()).unwrap_or_default();
+    assert_eq!(previews, vec![(8, true, 64)]);
+}

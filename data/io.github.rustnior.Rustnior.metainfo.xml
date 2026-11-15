@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.rustnior.Rustnior</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <name>rustnior</name>
+  <summary>Fast and minimal image viewer</summary>
+  <description>
+    <p>
+      rustnior is a lightweight image viewer in the spirit of Viewnior: it opens
+      instantly, shows images as fast as they can be decoded and keeps the
+      interface out of the way.
+    </p>
+    <ul>
+      <li>Browse a folder with the keyboard, mouse wheel or a thumbnail strip</li>
+      <li>GPU zooming and panning, fit to window, 100% and smooth zoom</li>
+      <li>Rotate and flip, with lossless saving for JPEG</li>
+      <li>Fullscreen, slideshow and animated GIF, PNG, WebP and JPEG XL</li>
+      <li>JPEG, PNG, WebP, GIF, TIFF, BMP, SVG, AVIF, HEIC, JPEG XL and more</li>
+      <li>EXIF orientation and metadata, copy to clipboard, set as wallpaper</li>
+      <li>Handles images of hundreds of megapixels without freezing</li>
+    </ul>
+  </description>
+  <launchable type="desktop-id">io.github.rustnior.Rustnior.desktop</launchable>
+  <provides>
+    <binary>rustnior</binary>
+  </provides>
+  <url type="homepage">https://github.com/czM1K3/rustnior</url>
+  <url type="bugtracker">https://github.com/czM1K3/rustnior/issues</url>
+  <developer id="io.github.rustnior">
+    <name>The rustnior contributors</name>
+  </developer>
+  <content_rating type="oars-1.1"/>
+  <supports>
+    <control>keyboard</control>
+    <control>pointing</control>
+  </supports>
+  <categories>
+    <category>Graphics</category>
+    <category>Viewer</category>
+  </categories>
+  <keywords>
+    <keyword>image</keyword>
+    <keyword>photo</keyword>
+    <keyword>viewer</keyword>
+  </keywords>
+  <releases>
+    <release version="0.1.0" date="2026-11-15">
+      <description>
+        <p>First release.</p>
+      </description>
+    </release>
+  </releases>
+</component>

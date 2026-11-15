@@ -72,3 +72,26 @@ Defaults chosen without asking, per the working process in CLAUDE.md.
 - **Preferences** use a `Stack` + `StackSwitcher` instead of a `Notebook`. Known
   upstream noise: GTK 4.24 prints "GtkImage reported baselines…" warnings for every
   `GtkSwitch` (reproduced with a bare switch and stock Adwaita); harmless.
+- **Default features** of the app: `turbojpeg` (system libjpeg-turbo: ~20% faster
+  full JPEG decodes in benchmarks, plus DCT-scaled previews), `jxl` (pure Rust) and
+  `heif` (system libheif ≥ 1.17, for HEIC and AVIF). `--no-default-features` gives
+  a binary without optional C libraries. The core crate keeps all of them opt-in.
+- **Preview first** only for the image being opened (loader priority 0). A preview
+  may be up to 25% smaller than the fitted size, since it is on screen briefly.
+  The very first image uses the monitor size remembered in the config, because it
+  is decoded before any window exists.
+- **Large images**: stills ≥ 8 MP and ≥ 1.5× the monitor get a monitor-sized copy
+  for zoomed-out display; images > 40 MP or > 8192 px on a side are drawn as
+  2048 px zero-copy tiles with 1 px overlap. Thresholds are constants in
+  `core::decode` and `app::texture`.
+- **Dev profile** optimises `rustnior-core` too: generic decode/resize code from
+  dependencies is instantiated there, and unoptimised it is 10–50× slower.
+- **License**: GPL-3.0-or-later (Viewnior's licence family; no Viewnior code is used).
+- **Startup target**: < 100 ms to first frame is met with a normal icon theme
+  (~60–70 ms measured). Very large icon themes (e.g. Papirus) cost ~0.5 s inside
+  GTK's own application start-up for every GTK4 app; see PERFORMANCE.md.
+- **Folder watching**: the browsed folder is monitored (GIO); creations, deletions
+  and renames trigger a debounced (400 ms) rescan that keeps the current image
+  selected; modified files are re-decoded. Only single-folder collections are watched.
+- **Adjust window size** (menu): sizes the window for 100% within 90% of the
+  monitor; the header bar's minimum width can make it wider than small images.

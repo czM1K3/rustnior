@@ -30,7 +30,7 @@ fn run_in_background<T: Send + 'static>(
 
 impl Window {
     pub fn has_unsaved_changes(&self) -> bool {
-        !self.inner.user_orientation.get().is_identity() && self.inner.view.texture().is_some()
+        !self.inner.user_orientation.get().is_identity() && self.inner.view.has_image()
     }
 
     /// The decoded current image, if it is on screen.

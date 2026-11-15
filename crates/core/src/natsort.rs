@@ -20,6 +20,14 @@ pub fn natural_cmp(a: &str, b: &str) -> Ordering {
                 a = ra;
                 b = rb;
             }
+            (Some(&x), Some(&y)) if x.is_ascii() && y.is_ascii() => {
+                let ord = x.to_ascii_lowercase().cmp(&y.to_ascii_lowercase());
+                if ord != Ordering::Equal {
+                    return ord;
+                }
+                a = &a[1..];
+                b = &b[1..];
+            }
             (Some(_), Some(_)) => {
                 // Compare one UTF-8 character at a time, case-insensitively.
                 let (ca, la) = next_char(a);
@@ -73,7 +81,11 @@ fn next_char(s: &[u8]) -> (char, usize) {
 }
 
 fn lower(c: char) -> char {
-    c.to_lowercase().next().unwrap_or(c)
+    if c.is_ascii() {
+        c.to_ascii_lowercase()
+    } else {
+        c.to_lowercase().next().unwrap_or(c)
+    }
 }
 
 #[cfg(test)]

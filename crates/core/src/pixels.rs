@@ -81,6 +81,9 @@ pub struct DecodedImage {
     pub exif: Option<Vec<u8>>,
     /// How the frames must be transformed for display (from EXIF).
     pub orientation: Orientation,
+    /// A screen-sized copy of a much larger still image, so it can be shown
+    /// fitted without uploading the full-resolution pixels to the GPU.
+    pub reduced: Option<Frame>,
 }
 
 impl DecodedImage {
@@ -94,6 +97,7 @@ impl DecodedImage {
             is_preview: false,
             exif: None,
             orientation: Orientation::IDENTITY,
+            reduced: None,
         }
     }
 
@@ -122,7 +126,8 @@ impl DecodedImage {
 
     /// Bytes of pixel memory held by this image.
     pub fn byte_size(&self) -> usize {
-        self.frames.iter().map(Frame::byte_size).sum()
+        self.frames.iter().map(Frame::byte_size).sum::<usize>()
+            + self.reduced.as_ref().map_or(0, Frame::byte_size)
     }
 }
 

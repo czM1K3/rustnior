@@ -137,6 +137,17 @@ impl Orientation {
         }
     }
 
+    /// Maps a continuous point (pixel edges, not centres) of a `w`×`h` image.
+    pub fn map_point_f(self, x: f64, y: f64, w: f64, h: f64) -> (f64, f64) {
+        let x = if self.flip { w - x } else { x };
+        match self.rot {
+            0 => (x, y),
+            1 => (h - y, x),
+            2 => (w - x, h - y),
+            _ => (y, w - x),
+        }
+    }
+
     /// Produces a new frame with the pixels physically transformed.
     pub fn apply_to_frame(self, src: &Frame) -> Frame {
         if self.is_identity() {
@@ -229,6 +240,20 @@ mod tests {
                     }
                 }
             }
+        }
+    }
+
+    #[test]
+    fn continuous_mapping_round_trips() {
+        let (w, h) = (40.0, 10.0);
+        for o in all() {
+            let (ow, oh) = if o.swaps_dimensions() { (h, w) } else { (w, h) };
+            let (x, y) = o.map_point_f(3.0, 7.0, w, h);
+            let back = o.inverse().map_point_f(x, y, ow, oh);
+            assert!(
+                (back.0 - 3.0).abs() < 1e-9 && (back.1 - 7.0).abs() < 1e-9,
+                "{o:?}"
+            );
         }
     }
 

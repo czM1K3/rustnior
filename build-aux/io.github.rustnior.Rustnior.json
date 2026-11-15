@@ -1,0 +1,62 @@
+{
+    "id": "io.github.rustnior.Rustnior",
+    "runtime": "org.gnome.Platform",
+    "runtime-version": "49",
+    "sdk": "org.gnome.Sdk",
+    "sdk-extensions": ["org.freedesktop.Sdk.Extension.rust-stable"],
+    "command": "rustnior",
+    "finish-args": [
+        "--share=ipc",
+        "--socket=wayland",
+        "--socket=fallback-x11",
+        "--device=dri",
+        "--filesystem=host",
+        "--talk-name=org.freedesktop.FileManager1"
+    ],
+    "build-options": {
+        "append-path": "/usr/lib/sdk/rust-stable/bin",
+        "env": {
+            "CARGO_HOME": "/run/build/rustnior/cargo",
+            "CARGO_NET_OFFLINE": "true"
+        }
+    },
+    "cleanup": ["/include", "/lib/pkgconfig", "/lib/cmake", "*.a"],
+    "modules": [
+        {
+            "name": "libde265",
+            "buildsystem": "cmake-ninja",
+            "config-opts": ["-DCMAKE_BUILD_TYPE=Release", "-DENABLE_SDL=OFF", "-DENABLE_DECODER=OFF", "-DENABLE_ENCODER=OFF"],
+            "sources": [{ "type": "git", "url": "https://github.com/strukturag/libde265.git", "tag": "v1.0.16" }]
+        },
+        {
+            "name": "libheif",
+            "buildsystem": "cmake-ninja",
+            "config-opts": [
+                "-DCMAKE_BUILD_TYPE=Release",
+                "-DWITH_EXAMPLES=OFF",
+                "-DWITH_GDK_PIXBUF=OFF",
+                "-DBUILD_TESTING=OFF",
+                "-DWITH_LIBDE265=ON",
+                "-DWITH_DAV1D=ON",
+                "-DWITH_X265=OFF",
+                "-DWITH_AOM_DECODER=OFF",
+                "-DWITH_AOM_ENCODER=OFF",
+                "-DWITH_RAV1E=OFF",
+                "-DWITH_SvtEnc=OFF"
+            ],
+            "sources": [{ "type": "git", "url": "https://github.com/strukturag/libheif.git", "tag": "v1.20.2" }]
+        },
+        {
+            "name": "rustnior",
+            "buildsystem": "simple",
+            "build-commands": [
+                "cargo --offline build --release --locked",
+                "make install PREFIX=/app CARGO_TARGET=target/release"
+            ],
+            "sources": [
+                { "type": "dir", "path": ".." },
+                "cargo-sources.json"
+            ]
+        }
+    ]
+}

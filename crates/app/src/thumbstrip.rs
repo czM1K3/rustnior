@@ -68,6 +68,7 @@ impl ThumbStrip {
             LoaderConfig {
                 threads: 2,
                 cache_bytes: 96 * 1024 * 1024,
+                previews: false,
             },
             move |path, req| {
                 let size = req.target_size.map_or(128, |(w, h)| w.max(h));

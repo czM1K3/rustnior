@@ -23,16 +23,8 @@ pub struct Animator {
 
 impl Animator {
     /// Starts playing `image`, whose first frame is already on screen.
-    pub fn start(
-        image: Arc<DecodedImage>,
-        view: ImageView,
-        first: Option<gdk::Texture>,
-    ) -> Rc<Self> {
-        let n = image.frames.len();
-        let mut textures = vec![None; n];
-        if let Some(t) = first {
-            textures[0] = Some(t);
-        }
+    pub fn start(image: Arc<DecodedImage>, view: ImageView) -> Rc<Self> {
+        let textures = vec![None; image.frames.len()];
         let this = Rc::new(Self {
             image,
             view,

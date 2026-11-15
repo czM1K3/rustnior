@@ -1,2 +1,5 @@
 /target
 *.swp
+/.flatpak-builder
+/build-dir
+/build-aux/cargo-sources.json

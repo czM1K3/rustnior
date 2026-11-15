@@ -20,7 +20,7 @@ Legend: `[ ]` todo · `[x]` done · `(M#)` target milestone · `+` = beyond View
 - [x] First/last: `Home`/`End`, `Alt+Home`/`Alt+End` (M2)
 - [x] Wrap around at collection ends (M2)
 - [x] Natural sort (+ sort by name/date/size, ascending/descending) (M2, `+`)
-- [ ] Watch folder for added/removed files (`+`, M6)
+- [x] Watch folder for added/removed files (`+`, M6)
 
 ## Zoom & pan
 - [x] Best fit (`F`, `0`, `KP_0`), normal size 100% (`1`, `Ctrl+0`), 200% (`2`), 300% (`3`) (M1)
@@ -30,7 +30,7 @@ Legend: `[ ]` todo · `[x]` done · `(M#)` target milestone · `+` = beyond View
 - [x] Pan by dragging; keyboard panning with arrows (step) and `Shift+arrows` (page) (M1)
 - [x] Initial zoom mode pref: smart (fit if larger, else 100%) / 100% / fit / last used (M1/M6)
 - [x] "Smooth images" pref (filtering on/off) (M6)
-- [ ] Adjust window size to the image (M6)
+- [x] Adjust window size to the image (M6)
 
 ## Transform
 - [x] Rotate clockwise `Ctrl+R` (+ `R`), anticlockwise `Ctrl+Shift+R` (+ `L`) (M3)
@@ -58,7 +58,7 @@ Legend: `[ ]` todo · `[x]` done · `(M#)` target milestone · `+` = beyond View
 ## File operations
 - [x] Save `Ctrl+S` (write rotated/flipped image back), Save as… (`Ctrl+Shift+S`, `+`) (M5)
 - [x] Lossless JPEG rotation (EXIF orientation tag rewrite, or re-encode with a warning) (M5)
-- [ ] JPEG quality / PNG compression prefs (M5/M6)
+- [x] JPEG quality / PNG compression prefs (M5/M6)
 - [x] Delete `Delete` → trash, optional confirmation (pref, default on) (M5)
 - [x] Copy image to clipboard `Ctrl+C`, copy path `Ctrl+Shift+C` (`+`) (M5)
 - [x] Set as wallpaper `Ctrl+F8` (GNOME, KDE, XFCE, MATE, Cinnamon, LXDE, Fluxbox/Nitrogen/feh fallback) (M5)
@@ -81,3 +81,12 @@ Legend: `[ ]` todo · `[x]` done · `(M#)` target milestone · `+` = beyond View
 `confirm-delete`, `reload-on-save`, `show-toolbar`, `show-scrollbar`, `show-statusbar`,
 `start-maximized`, `slideshow-timeout`, `auto-resize`, `behavior-wheel`, `behavior-click`,
 `behavior-modify`, `jpeg-quality`, `png-compression`, `desktop`.
+
+## Beyond Viewnior (from the project requirements)
+- [x] Natural sort plus sort by name/date/size
+- [x] Preview-first decoding (libjpeg-turbo DCT scaling), then refine
+- [x] Background preloading with a bounded LRU cache and cancellation
+- [x] GPU scaling; screen-sized copies and tiles for 100+ MP images
+- [x] AVIF/HEIC (libheif) and JPEG XL (jxl-oxide), feature-gated
+- [x] Criterion benchmarks for decode, resize, transform and sorting
+- [x] `.desktop`, icon, AppStream metainfo, Flatpak manifest, CI

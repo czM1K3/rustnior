@@ -26,6 +26,14 @@ lto = "thin"
 codegen-units = 1
 strip = true
 
-# Decoders are hot even in debug builds; keep dev builds usable.
+# Decoders are hot even in debug builds; keep dev builds usable. The core
+# crate is included because generic decode/resize code from dependencies is
+# instantiated (and optimised) there.
 [profile.dev.package."*"]
 opt-level = 3
+
+[profile.dev.package.rustnior-core]
+opt-level = 3
+
+[profile.bench]
+debug = true

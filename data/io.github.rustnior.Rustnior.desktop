@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=rustnior
+GenericName=Image Viewer
+Comment=Fast and minimal image viewer
+Exec=rustnior %U
+Icon=io.github.rustnior.Rustnior
+Terminal=false
+StartupNotify=true
+Categories=Graphics;Viewer;2DGraphics;RasterGraphics;GTK;
+Keywords=image;picture;photo;viewer;slideshow;gallery;
+MimeType=image/jpeg;image/png;image/apng;image/gif;image/webp;image/bmp;image/x-bmp;image/tiff;image/x-icon;image/vnd.microsoft.icon;image/x-tga;image/x-portable-anymap;image/x-portable-bitmap;image/x-portable-graymap;image/x-portable-pixmap;image/qoi;image/x-exr;image/vnd.radiance;image/x-dds;image/svg+xml;image/svg+xml-compressed;image/jxl;image/avif;image/heic;image/heif;

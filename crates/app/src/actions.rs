@@ -143,6 +143,7 @@ pub fn setup(win: &Window, app: &gtk::Application) {
     add("open-with", Box::new(Window::open_with));
     add("open-location", Box::new(Window::open_containing_folder));
     add("reload", Box::new(Window::reload));
+    add("fit-window", Box::new(Window::fit_window_to_image));
     add("preferences", Box::new(crate::prefs::show));
     add("shortcuts", Box::new(crate::shortcuts::show));
     add("about", Box::new(show_about));
@@ -377,6 +378,7 @@ pub fn build_header(zoom_label: &gtk::Label) -> gtk::HeaderBar {
     menu.append_section(None, &image);
     let view = gio::Menu::new();
     view.append(Some("Toolbar"), Some("win.show-toolbar"));
+    view.append(Some("Adjust Window Size"), Some("win.fit-window"));
     view.append(Some("Fullscreen"), Some("win.fullscreen"));
     view.append(Some("Slideshow"), Some("win.slideshow"));
     view.append(Some("Thumbnails"), Some("win.show-thumbnails"));

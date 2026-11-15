@@ -23,3 +23,12 @@ tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 gtk = { version = "0.11", package = "gtk4", features = ["gnome_46"] }
 trash = "5.3.0"
 directories = "6.0.0"
+
+[features]
+default = ["turbojpeg", "jxl", "heif"]
+# System libjpeg-turbo: faster JPEG decoding and DCT-scaled previews.
+turbojpeg = ["rustnior-core/turbojpeg"]
+# JPEG XL (pure Rust).
+jxl = ["rustnior-core/jxl"]
+# HEIC/HEIF and AVIF through the system libheif (>= 1.17).
+heif = ["rustnior-core/heif"]
