@@ -9,6 +9,45 @@ use rustnior_core::config::ThemePref;
 thread_local! {
     /// Keeps the portal proxy (and its signal handler) alive.
     static PORTAL: RefCell<Option<gio::DBusProxy>> = const { RefCell::new(None) };
+    static CSS_INSTALLED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+const TRANSLUCENT_CLASS: &str = "rustnior-translucent";
+
+/// The window normally paints the theme background under everything; a
+/// translucent window drops it so only the image view's own (translucent)
+/// background colour is drawn.
+const CSS: &str = "window.rustnior-translucent { background: none; }";
+
+/// Adds the app's style sheet to the default display (once).
+pub fn install_css() {
+    if CSS_INSTALLED.with(|i| i.replace(true)) {
+        return;
+    }
+    let Some(display) = gtk::gdk::Display::default() else {
+        return;
+    };
+    let provider = gtk::CssProvider::new();
+    provider.load_from_string(CSS);
+    // Above user priority: `~/.config/gtk-4.0/gtk.css` (often a symlinked
+    // theme) styles `.background` there and would otherwise keep the window
+    // opaque. The rule only applies once the user opts in.
+    gtk::style_context_add_provider_for_display(
+        &display,
+        &provider,
+        gtk::STYLE_PROVIDER_PRIORITY_USER + 1,
+    );
+}
+
+/// Lets the desktop show through the window behind the image. Needs a
+/// compositor; without one the uncovered area is black.
+pub fn set_translucent(window: &impl IsA<gtk::Widget>, on: bool) {
+    let window = window.as_ref();
+    if on {
+        window.add_css_class(TRANSLUCENT_CLASS);
+    } else {
+        window.remove_css_class(TRANSLUCENT_CLASS);
+    }
 }
 
 const NAMESPACE: &str = "org.freedesktop.appearance";

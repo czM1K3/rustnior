@@ -70,6 +70,7 @@ Legend: `[ ]` todo · `[x]` done · `(M#)` target milestone · `+` = beyond View
 - [x] Right-click context menu (M5)
 - [x] Dark/light theme following the system (M6)
 - [x] Background colour pref ("dark background" in Viewnior) + optional checkerboard for transparency (M1/M6)
+- [x] Translucent window background: background opacity pref (beyond Viewnior)
 - [x] Remember window size/position(*), maximised state, toolbar visibility, last zoom (M6)
 - [x] Preferences dialog (M6)
 - [x] Error message area for unreadable files (M2)

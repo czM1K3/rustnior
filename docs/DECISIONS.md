@@ -95,3 +95,13 @@ Defaults chosen without asking, per the working process in CLAUDE.md.
   selected; modified files are re-decoded. Only single-folder collections are watched.
 - **Adjust window size** (menu): sizes the window for 100% within 90% of the
   monitor; the header bar's minimum width can make it wider than small images.
+- **Translucent background**: the custom background colour takes an alpha
+  (`#rrggbbaa` in the config, an opacity slider in Preferences rather than the
+  colour chooser's hidden alpha control). Below 100% the window stops painting the
+  theme background, so the desktop shows through around the image; the header bar,
+  status bar and thumbnail strip keep an opaque theme background so they stay
+  readable (they carry the theme's own `background` style class). The CSS rule is
+  loaded above user priority, because `~/.config/gtk-4.0/gtk.css` (often a symlinked
+  theme) styles `.background` at user priority and would keep the window opaque.
+  Needs a compositor (without one the uncovered area is black). The theme
+  background (no custom colour) is always opaque.

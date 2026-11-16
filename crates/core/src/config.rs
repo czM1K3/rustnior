@@ -136,7 +136,9 @@ pub struct Config {
     pub slideshow_seconds: u32,
 
     pub theme: ThemePref,
-    /// `#rrggbb`; empty means the theme's window background.
+    /// `#rrggbb` or `#rrggbbaa`; empty means the theme's window background.
+    /// An alpha below `ff` makes the window see-through behind the image
+    /// (needs a compositor).
     pub background: String,
     pub checkerboard: bool,
     pub show_toolbar: bool,
@@ -267,19 +269,38 @@ impl Config {
         }
     }
 
-    /// Background as RGB in 0..=1, if a custom colour is set.
-    pub fn background_rgb(&self) -> Option<(f32, f32, f32)> {
+    /// Background as RGBA in 0..=1, if a custom colour is set. A colour
+    /// without an alpha component is opaque.
+    pub fn background_rgba(&self) -> Option<(f32, f32, f32, f32)> {
         if !is_hex_color(&self.background) {
             return None;
         }
-        let v = u32::from_str_radix(&self.background[1..], 16).ok()?;
+        let hex = &self.background[1..];
+        let v = u32::from_str_radix(hex, 16).ok()?;
+        let v = if hex.len() == 6 { v << 8 | 0xFF } else { v };
         let c = |shift: u32| ((v >> shift) & 0xFF) as f32 / 255.0;
-        Some((c(16), c(8), c(0)))
+        Some((c(24), c(16), c(8), c(0)))
+    }
+
+    /// True when the custom background lets the desktop show through.
+    pub fn background_is_translucent(&self) -> bool {
+        self.background_rgba().is_some_and(|(.., a)| a < 1.0)
+    }
+}
+
+/// Formats RGBA in 0..=1 as `#rrggbb`, or `#rrggbbaa` when not opaque.
+pub fn hex_color(r: f32, g: f32, b: f32, a: f32) -> String {
+    let byte = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
+    let (r, g, b, a) = (byte(r), byte(g), byte(b), byte(a));
+    if a == 0xFF {
+        format!("#{r:02x}{g:02x}{b:02x}")
+    } else {
+        format!("#{r:02x}{g:02x}{b:02x}{a:02x}")
     }
 }
 
 fn is_hex_color(s: &str) -> bool {
-    s.len() == 7 && s.starts_with('#') && s[1..].chars().all(|c| c.is_ascii_hexdigit())
+    matches!(s.len(), 7 | 9) && s.starts_with('#') && s[1..].chars().all(|c| c.is_ascii_hexdigit())
 }
 
 #[cfg(test)]
@@ -343,9 +364,30 @@ mod tests {
             background: "#ff8000".into(),
             ..Config::default()
         };
-        let (r, g, b) = c.background_rgb().expect("rgb");
+        let (r, g, b, a) = c.background_rgba().expect("rgba");
         assert!((r - 1.0).abs() < 1e-6 && (g - 128.0 / 255.0).abs() < 1e-6 && b == 0.0);
-        assert!(Config::default().background_rgb().is_none());
+        assert_eq!(a, 1.0);
+        assert!(!c.background_is_translucent());
+        assert!(Config::default().background_rgba().is_none());
+        assert!(!Config::default().background_is_translucent());
+    }
+
+    #[test]
+    fn parses_translucent_background() {
+        let c = Config::from_toml("background = \"#10203080\"").expect("de");
+        assert_eq!(c.background, "#10203080");
+        let (.., a) = c.background_rgba().expect("rgba");
+        assert!((a - 128.0 / 255.0).abs() < 1e-6);
+        assert!(c.background_is_translucent());
+        let c = Config::from_toml("background = \"#1020300\"").expect("de");
+        assert!(c.background.is_empty());
+    }
+
+    #[test]
+    fn formats_hex_colours() {
+        assert_eq!(hex_color(1.0, 0.5, 0.0, 1.0), "#ff8000");
+        assert_eq!(hex_color(0.0, 0.0, 0.0, 0.0), "#00000000");
+        assert_eq!(hex_color(2.0, -1.0, 0.0, 0.5), "#ff000080");
     }
 
     #[test]

@@ -2,6 +2,7 @@
 
 use gtk::{gdk, prelude::*};
 use rustnior_core::Config;
+use rustnior_core::config::hex_color;
 use rustnior_core::config::{ClickPref, ModifyPref, SortPref, ThemePref, WheelPref, ZoomPref};
 
 use crate::window::Window;
@@ -141,33 +142,10 @@ pub fn show(win: &Window) {
         "Checkerboard behind transparency",
         &switch(win, c.checkerboard, |c, v| c.checkerboard = v),
     );
-    let color = gtk::ColorDialogButton::new(Some(gtk::ColorDialog::new()));
-    if let Some((r, g, b)) = c.background_rgb() {
-        color.set_rgba(&gdk::RGBA::new(r, g, b, 1.0));
-    } else {
-        color.set_rgba(&gdk::RGBA::new(0.12, 0.12, 0.12, 1.0));
-    }
-    color.set_sensitive(!c.background.is_empty());
-    let custom = gtk::Switch::builder()
-        .active(!c.background.is_empty())
-        .build();
-    let (w, cb) = (win.clone(), color.clone());
-    custom.connect_active_notify(move |s| {
-        cb.set_sensitive(s.is_active());
-        let hex = if s.is_active() {
-            to_hex(&cb.rgba())
-        } else {
-            String::new()
-        };
-        update(&w, |c| c.background = hex);
-    });
-    let w = win.clone();
-    color.connect_rgba_notify(move |b| {
-        let hex = to_hex(&b.rgba());
-        update(&w, |c| c.background = hex);
-    });
+    let (custom, color, opacity) = background_controls(win, &c);
     view.add("Custom background colour", &custom);
     view.add("Background colour", &color);
+    view.add("Background opacity", &opacity);
     view.add(
         "Fit when entering fullscreen",
         &switch(win, c.fit_on_fullscreen, |c, v| c.fit_on_fullscreen = v),
@@ -283,7 +261,62 @@ pub fn show(win: &Window) {
     dialog.present();
 }
 
-fn to_hex(c: &gdk::RGBA) -> String {
-    let b = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
-    format!("#{:02x}{:02x}{:02x}", b(c.red()), b(c.green()), b(c.blue()))
+/// The custom-background switch, colour button and opacity slider. Opacity
+/// below 100% makes the window see-through behind the image.
+fn background_controls(
+    win: &Window,
+    c: &Config,
+) -> (gtk::Switch, gtk::ColorDialogButton, gtk::Scale) {
+    let (rgb, alpha) = match c.background_rgba() {
+        Some((r, g, b, a)) => (gdk::RGBA::new(r, g, b, 1.0), a),
+        None => (gdk::RGBA::new(0.12, 0.12, 0.12, 1.0), 1.0),
+    };
+    let custom = gtk::Switch::builder()
+        .active(!c.background.is_empty())
+        .build();
+    // Alpha is set with the opacity slider, which is easier to find than
+    // the colour chooser's own alpha control.
+    let dialog = gtk::ColorDialog::builder().with_alpha(false).build();
+    let color = gtk::ColorDialogButton::new(Some(dialog));
+    color.set_rgba(&rgb);
+    let opacity = gtk::Scale::with_range(gtk::Orientation::Horizontal, 0.0, 100.0, 1.0);
+    opacity.set_value((f64::from(alpha) * 100.0).round());
+    opacity.set_draw_value(true);
+    opacity.set_value_pos(gtk::PositionType::Left);
+    opacity.set_format_value_func(|_, v| format!("{v:.0}%"));
+    opacity.set_size_request(200, -1);
+    opacity.set_tooltip_text(Some(
+        "Below 100% the desktop shows through behind the image (needs a compositor)",
+    ));
+    for w in [color.upcast_ref::<gtk::Widget>(), opacity.upcast_ref()] {
+        w.set_sensitive(custom.is_active());
+    }
+
+    let store = {
+        let (w, custom, color, opacity) =
+            (win.clone(), custom.clone(), color.clone(), opacity.clone());
+        move || {
+            let hex = if custom.is_active() {
+                let rgba = color.rgba();
+                let alpha = (opacity.value() / 100.0) as f32;
+                hex_color(rgba.red(), rgba.green(), rgba.blue(), alpha)
+            } else {
+                String::new()
+            };
+            if w.inner.config.borrow().background != hex {
+                update(&w, |c| c.background = hex);
+            }
+        }
+    };
+    let (s, cb, op) = (store.clone(), color.clone(), opacity.clone());
+    custom.connect_active_notify(move |sw| {
+        cb.set_sensitive(sw.is_active());
+        op.set_sensitive(sw.is_active());
+        s();
+    });
+    let s = store.clone();
+    color.connect_rgba_notify(move |_| s());
+    opacity.connect_value_changed(move |_| store());
+
+    (custom, color, opacity)
 }

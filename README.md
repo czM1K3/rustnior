@@ -20,7 +20,8 @@ shortcuts, with a focus on startup time, decode speed and low memory use.
 - Move to trash, copy image or path, set as wallpaper (GNOME, KDE, Cinnamon, MATE,
   XFCE, LXDE/LXQt, sway, Hyprland, portal, feh/nitrogen), open with, show in folder
 - Right-click menu, preferences, light/dark theme following the system,
-  configurable background and transparency checkerboard
+  configurable background (optionally translucent, so the desktop shows through)
+  and transparency checkerboard
 - Very large images (100+ MP) stay responsive: screen-sized copy when zoomed out,
   on-demand tiles when zoomed in
 - Preloads neighbouring images with a memory-bounded cache and cancels stale work
@@ -113,10 +114,12 @@ opens the menu.
 ## Configuration
 
 Settings are changed in Preferences and stored in
-`~/.config/rustnior/config.toml`. Any shortcut can be overridden there:
+`~/.config/rustnior/config.toml`. `background` is `#rrggbb`, or `#rrggbbaa`
+for a see-through window (needs a compositing window manager). Any shortcut can
+be overridden there:
 
 ```toml
-background = "#1e1e1e"
+background = "#1e1e1ecc"
 wheel = "navigate"
 
 [shortcuts]

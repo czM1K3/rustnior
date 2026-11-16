@@ -183,6 +183,11 @@ impl Window {
 
         let status = StatusBar::new();
         let strip = ThumbStrip::new(Arc::clone(&decoders), window.scale_factor());
+        // The bars paint the theme's window background themselves, so they
+        // stay opaque when the window background is translucent.
+        status.root.add_css_class("background");
+        strip.root.add_css_class("background");
+        crate::theme::install_css();
         let content = gtk::Box::new(gtk::Orientation::Vertical, 0);
         content.append(&overlay);
         content.append(&strip.root);
@@ -346,9 +351,10 @@ impl Window {
         view.set_smooth(c.smooth_images);
         view.set_checkerboard(c.checkerboard);
         view.set_background(
-            c.background_rgb()
-                .map(|(r, g, b)| gtk::gdk::RGBA::new(r, g, b, 1.0)),
+            c.background_rgba()
+                .map(|(r, g, b, a)| gtk::gdk::RGBA::new(r, g, b, a)),
         );
+        crate::theme::set_translucent(&inner.window, c.background_is_translucent());
         view.set_upscale_on_fit(c.zoom_mode == ZoomPref::Fit);
         inner.fs.interval.set_value(f64::from(c.slideshow_seconds));
         inner
