@@ -72,7 +72,8 @@ pub(crate) struct Toast {
 }
 
 impl Toast {
-    fn new() -> Self {
+    /// `backdrop` is blurred behind the message.
+    fn new(backdrop: &impl IsA<gtk::Widget>) -> Self {
         let label = gtk::Label::builder().wrap(true).build();
         let frame = gtk::Box::builder().css_classes(["osd", "toolbar"]).build();
         frame.append(&label);
@@ -82,7 +83,7 @@ impl Toast {
             .valign(gtk::Align::End)
             .margin_bottom(24)
             .can_target(false)
-            .child(&frame)
+            .child(&crate::blur::BlurBin::new(&frame, backdrop))
             .build();
         Self {
             revealer,
@@ -200,9 +201,9 @@ impl Window {
             .build();
         let header = crate::actions::build_header(&zoom_label);
         window.set_titlebar(Some(&header));
-        let fs = crate::fullscreen::FsUi::new();
+        let fs = crate::fullscreen::FsUi::new(&view);
         overlay.add_overlay(&fs.revealer);
-        let toast = Toast::new();
+        let toast = Toast::new(&view);
         overlay.add_overlay(&toast.revealer);
 
         // Loader events arrive on worker threads; forward them to the main loop.

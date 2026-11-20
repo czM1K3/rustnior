@@ -2,6 +2,7 @@
 
 mod actions;
 mod animation;
+mod blur;
 mod dialogs;
 mod fileops;
 mod fullscreen;

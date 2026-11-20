@@ -105,3 +105,10 @@ Defaults chosen without asking, per the working process in CLAUDE.md.
   theme) styles `.background` at user priority and would keep the window opaque.
   Needs a compositor (without one the uncovered area is black). The theme
   background (no custom colour) is always opaque.
+- **Blurred on-screen controls**: GTK CSS has no `backdrop-filter`, so the
+  fullscreen controls and the toast are wrapped in `BlurBin`, which snapshots a
+  `GtkWidgetPaintable` of the image view behind them through a 18 px blur, clipped
+  to the box (only the area the blur reads is rendered). The source is mirrored
+  across its edges so controls near the screen edge don't blur in transparency.
+  The OSD box gets a lighter tint (45% black) and a fixed 12 px radius that the
+  clip matches, set at the same priority as the translucency rule.

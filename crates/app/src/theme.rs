@@ -17,7 +17,13 @@ const TRANSLUCENT_CLASS: &str = "rustnior-translucent";
 /// The window normally paints the theme background under everything; a
 /// translucent window drops it so only the image view's own (translucent)
 /// background colour is drawn.
-const CSS: &str = "window.rustnior-translucent { background: none; }";
+///
+/// On-screen controls sit on a blurred copy of the image (`blur::BlurBin`),
+/// so they get a lighter tint and a radius matching `blur::CORNER_RADIUS`.
+const CSS: &str = "
+window.rustnior-translucent { background: none; }
+blurbin > .osd { border-radius: 12px; background-color: rgba(0, 0, 0, 0.45); }
+";
 
 /// Adds the app's style sheet to the default display (once).
 pub fn install_css() {

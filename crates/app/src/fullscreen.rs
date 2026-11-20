@@ -23,7 +23,8 @@ pub struct FsUi {
 }
 
 impl FsUi {
-    pub fn new() -> Self {
+    /// `backdrop` is blurred behind the controls.
+    pub fn new(backdrop: &impl IsA<gtk::Widget>) -> Self {
         let button = |icon: &str, action: &str, tip: &str| {
             gtk::Button::builder()
                 .icon_name(icon)
@@ -83,7 +84,7 @@ impl FsUi {
             .margin_top(12)
             .reveal_child(false)
             .visible(false)
-            .child(&controls)
+            .child(&crate::blur::BlurBin::new(&controls, backdrop))
             .build();
         let hovered = Rc::new(Cell::new(false));
         let hover = gtk::EventControllerMotion::new();
